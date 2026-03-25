@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pro PDF Editor | Studio Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/regenerator-runtime@0.14.1/runtime.min.js"></script>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="https://unpkg.com/@pdf-lib/fontkit/dist/fontkit.umd.min.js"></script>
+
+    <style>
+        body { background-color: #f3f4f6; }
+        #main-viewer {
+            position: relative; overflow: auto; -webkit-overflow-scrolling: touch;
+        }
+        #pdf-wrapper {
+            position: relative; display: inline-block;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); background: white;
+            margin: 20px auto; transform-origin: top left;
+        }
+        canvas { display: block; }
+        
+        .pdf-field-container { position: absolute; z-index: 50; }
+        
+        /* Text Specific */
+        .pdf-field-input {
+            background: transparent; border: 1px dashed transparent; color: #000;
+            font-family: sans-serif; padding: 2px 4px; outline: none;
+            min-width: 50px; white-space: pre-wrap; transition: border 0.2s;
+            resize: horizontal; overflow: hidden;
+        }
+        
+        /* Image Specific & Advanced Controls */
+        .pdf-image-wrapper {
+            border: 2px dashed transparent; position: relative;
+            box-sizing: border-box; user-select: none;
+        }
+        .pdf-image-wrapper img {
+            width: 100%; height: 100%; object-fit: fill; pointer-events: none;
+        }
+
+        /* 4-Way Resize Handles */
+        .resize-handle {
+            position: absolute; width: 12px; height: 12px;
+            background: white; border: 2px solid #3b82f6; border-radius: 50%;
+            display: none; z-index: 10;
+        }
+        .pdf-field-container.active .resize-handle { display: block; }
+        .resize-handle.nw { top: -6px; left: -6px; cursor: nwse-resize; }
+        .resize-handle.ne { top: -6px; right: -6px; cursor: nesw-resize; }
+        .resize-handle.sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+        .resize-handle.se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+
+        /* Rotation Handle */
+        .rotate-handle {
+            position: absolute; top: -35px; left: 50%; transform: translateX(-50%);
+            width: 12px; height: 12px; background: #10b981; border-radius: 50%;
+            cursor: grab; display: none; z-index: 10;
+        }
+        .rotate-handle::after { /* The line connecting it to the image */
+            content: ''; position: absolute; width: 2px; height: 23px;
+            background: #10b981; top: 12px; left: 5px;
+        }
+        .rotate-handle:active { cursor: grabbing; }
+        .pdf-field-container.active .rotate-handle { display: block; }
+
+        /* Hover & Active States */
+        .pdf-field-container:hover .pdf-field-input,
+        .pdf-field-container.active .pdf-field-input,
+        .pdf-field-container.active .pdf-image-wrapper {
+            border-color: #3b82f6; background: rgba(255, 255, 255, 0.3);
+        }
+        .pdf-field-container.active { z-index: 60; }
+        
+        .field-controls {
+            display: none; position: absolute; top: -28px; left: 0;
+            width: 100%; justify-content: space-between; z-index: 20;
+        }
+        .pdf-field-container.active .field-controls { display: flex; }
+        
+        /* Utility Buttons */
+        .drag-handle, .delete-btn {
+            background: white; border: 1px solid #e5e7eb; border-radius: 4px;
+            width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); color: #4b5563;
+        }
+        .drag-handle { cursor: grab; }
+        .drag-handle:active { cursor: grabbing; }
+        .delete-btn { cursor: pointer; color: #ef4444; }
+        .delete-btn:hover { background: #fee2e2; }
+
+        .format-btn { padding: 4px 8px; border-radius: 4px; cursor: pointer; color: #4b5563; }
+        .format-btn.active { background: #dbeafe; color: #2563eb; }
+        .format-btn:hover:not(.active) { background: #f3f4f6; }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden text-gray-800">
+
+    <header class="bg-white shadow-sm px-4 py-3 flex flex-wrap justify-between items-center z-20 gap-4">
+        <div class="flex items-center gap-3">
+            <i class="fa-solid fa-file-pdf text-red-500 text-2xl"></i>
+            <h1 class="text-xl font-bold hidden xl:block">Pro PDF Editor</h1>
+        </div>
+
+        <div class="flex gap-2 border-r pr-4">
+            <button id="undo-btn" class="text-gray-400 hover:text-gray-800 transition disabled:opacity-30" disabled><i class="fa-solid fa-rotate-left"></i></button>
+            <button id="redo-btn" class="text-gray-400 hover:text-gray-800 transition disabled:opacity-30" disabled><i class="fa-solid fa-rotate-right"></i></button>
+        </div>
+
+        <div id="formatting-toolbar" class="hidden flex-1 flex flex-wrap justify-center items-center gap-3 bg-gray-50 px-4 py-1 rounded-lg border border-gray-200">
+            <div class="flex bg-white border rounded">
+                <button class="format-btn format-toggle" data-format="bold"><i class="fa-solid fa-bold"></i></button>
+                <button class="format-btn format-toggle border-l" data-format="italic"><i class="fa-solid fa-italic"></i></button>
+                <button class="format-btn format-toggle border-l" data-format="underline"><i class="fa-solid fa-underline"></i></button>
+            </div>
+            <div class="w-px h-6 bg-gray-300"></div>
+            <div class="flex bg-white border rounded">
+                <button class="format-btn align-toggle active" data-align="left"><i class="fa-solid fa-align-left"></i></button>
+                <button class="format-btn align-toggle border-l" data-align="center"><i class="fa-solid fa-align-center"></i></button>
+                <button class="format-btn align-toggle border-l" data-align="right"><i class="fa-solid fa-align-right"></i></button>
+            </div>
+            <div class="w-px h-6 bg-gray-300"></div>
+            <div class="flex items-center gap-2">
+                <input type="number" id="font-size-input" value="16" min="8" max="72" class="w-14 border rounded px-1 py-1 text-sm outline-none">
+                <input type="color" id="color-input" value="#000000" class="w-6 h-6 rounded cursor-pointer border-0 p-0">
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 ml-auto">
+            <label class="cursor-pointer bg-green-50 text-green-600 px-3 py-2 rounded-lg font-medium hover:bg-green-100 transition text-sm">
+                <i class="fa-regular fa-image sm:mr-1"></i> <span class="hidden sm:inline">Image</span>
+                <input type="file" id="upload-image" accept="image/png, image/jpeg" class="hidden">
+            </label>
+            <label class="cursor-pointer bg-blue-50 text-blue-600 px-3 py-2 rounded-lg font-medium hover:bg-blue-100 transition text-sm">
+                <i class="fa-solid fa-upload sm:mr-1"></i> <span class="hidden sm:inline">PDF</span>
+                <input type="file" id="upload-pdf" accept="application/pdf" class="hidden">
+            </label>
+            <button id="download-btn" class="bg-blue-600 text-white px-3 py-2 rounded-lg font-medium hover:bg-blue-700 transition shadow-md hidden text-sm">
+                <i class="fa-solid fa-download sm:mr-1"></i> <span class="hidden sm:inline">Export</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden relative">
+        <main class="flex-1 bg-gray-200 overflow-auto p-4 md:p-8 flex justify-center items-start" id="main-viewer">
+            <div id="empty-state" class="flex flex-col items-center justify-center text-gray-400 h-full w-full mt-20">
+                <i class="fa-solid fa-file-pdf text-6xl mb-4 text-gray-300"></i>
+                <h2 class="text-xl font-medium text-gray-600">Studio Ready</h2>
+            </div>
+            <div id="pdf-wrapper" class="hidden"><canvas id="pdf-canvas"></canvas></div>
+        </main>
+    </div>
+
+    <div id="pagination-controls" class="hidden absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white shadow-lg rounded-full px-4 py-2 flex items-center gap-4 z-50 border">
+        <button id="prev-page" class="text-gray-600 hover:text-blue-600"><i class="fa-solid fa-chevron-left"></i></button>
+        <span class="text-sm font-bold"><span id="current-page">0</span> / <span id="total-pages">0</span></span>
+        <button id="next-page" class="text-gray-600 hover:text-blue-600"><i class="fa-solid fa-chevron-right"></i></button>
+    </div>
+
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+        let pdfDoc = null, pageNum = 1, scale = window.innerWidth < 768 ? 1.0 : 1.5;
+        const canvas = document.getElementById('pdf-canvas'), ctx = canvas.getContext('2d'), wrapper = document.getElementById('pdf-wrapper');
+        let pdfBytes = null;
+
+        // --- HISTORY & STATE ---
+        let historyStack = [[]], historyIndex = 0, activeFieldId = null;
+
+        function saveState() {
+            const currentState = historyStack[historyIndex].map(f => ({...f}));
+            // Sync text before saving
+            currentState.forEach(field => {
+                const el = document.getElementById(field.id);
+                if (el && field.type === 'text') {
+                    field.text = el.querySelector('textarea, input').value;
+                    field.width = el.querySelector('.pdf-field-input').offsetWidth;
+                }
+            });
+            historyStack = historyStack.slice(0, historyIndex + 1);
+            historyStack.push(JSON.parse(JSON.stringify(currentState)));
+            historyIndex++;
+            updateHistoryButtons();
+        }
+
+        function updateHistoryButtons() {
+            document.getElementById('undo-btn').disabled = historyIndex === 0;
+            document.getElementById('redo-btn').disabled = historyIndex === historyStack.length - 1;
+        }
+
+        document.getElementById('undo-btn').addEventListener('click', () => { if (historyIndex > 0) { historyIndex--; renderStateToDOM(); }});
+        document.getElementById('redo-btn').addEventListener('click', () => { if (historyIndex < historyStack.length - 1) { historyIndex++; renderStateToDOM(); }});
+        function getFields() { return historyStack[historyIndex]; }
+        
+        // Target active state item for direct mutation
+        function getActiveFieldRef(id) { return getFields().find(f => f.id === id); } 
+
+        // --- PDF LOADING ---
+        document.getElementById('upload-pdf').addEventListener('change', async (e) => {
+            const file = e.target.files[0]; if (!file) return;
+            const fileReader = new FileReader();
+            fileReader.onload = async function () {
+                pdfBytes = new Uint8Array(this.result);
+                pdfDoc = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
+                document.getElementById('total-pages').textContent = pdfDoc.numPages;
+                document.getElementById('empty-state').classList.add('hidden');
+                wrapper.classList.remove('hidden');
+                document.getElementById('download-btn').classList.remove('hidden');
+                document.getElementById('pagination-controls').classList.remove('hidden');
+                document.getElementById('pagination-controls').classList.add('flex');
+                pageNum = 1; historyStack = [[]]; historyIndex = 0; renderPage(pageNum);
+            };
+            fileReader.readAsArrayBuffer(file);
+        });
+
+        function renderPage(num) {
+            pdfDoc.getPage(num).then(page => {
+                const viewport = page.getViewport({ scale: scale });
+                canvas.height = viewport.height; canvas.width = viewport.width;
+                wrapper.style.width = `${viewport.width}px`; wrapper.style.height = `${viewport.height}px`;
+                page.render({ canvasContext: ctx, viewport: viewport }).promise.then(() => renderStateToDOM());
+            });
+            document.getElementById('current-page').textContent = num;
+        }
+
+        document.getElementById('prev-page').addEventListener('click', () => { if(pageNum > 1) { setActiveField(null); pageNum--; renderPage(pageNum); }});
+        document.getElementById('next-page').addEventListener('click', () => { if(pageNum < pdfDoc.numPages) { setActiveField(null); pageNum++; renderPage(pageNum); }});
+
+        // --- CREATION ---
+        wrapper.addEventListener('click', (e) => {
+            if (e.target !== canvas) return;
+            const rect = wrapper.getBoundingClientRect();
+            getFields().push({
+                id: `field_${Date.now()}`, type: 'text', page: pageNum, x: e.clientX - rect.left, y: e.clientY - rect.top,
+                text: '', fontSize: 16, color: '#000000', bold: false, italic: false, underline: false, align: 'left', width: 150, rotation: 0
+            });
+            saveState(); renderStateToDOM();
+        });
+
+        document.getElementById('upload-image').addEventListener('change', (e) => {
+            const file = e.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    let w = img.width, h = img.height;
+                    if(w > 300) { h = (300/w) * h; w = 300; }
+                    getFields().push({
+                        id: `img_${Date.now()}`, type: 'image', page: pageNum, x: 50, y: 50,
+                        width: w, height: h, src: event.target.result, rotation: 0
+                    });
+                    saveState(); renderStateToDOM();
+                };
+                img.src = event.target.result;
+            };
+            reader.readAsDataURL(file); e.target.value = '';
+        });
+
+        // --- DOM RENDERING ---
+        function renderStateToDOM() {
+            document.querySelectorAll('.pdf-field-container').forEach(el => el.remove());
+
+            getFields().forEach(field => {
+                if (field.page !== pageNum) return;
+
+                const container = document.createElement('div');
+                container.className = `pdf-field-container ${activeFieldId === field.id ? 'active' : ''}`;
+                container.style.left = `${field.x}px`;
+                container.style.top = `${field.y}px`;
+                container.style.transform = `rotate(${field.rotation || 0}deg)`;
+                container.id = field.id;
+
+                let contentHtml = '';
+                if (field.type === 'text') {
+                    const styles = `font-size: ${field.fontSize}px; color: ${field.color}; font-weight: ${field.bold ? 'bold' : 'normal'}; font-style: ${field.italic ? 'italic' : 'normal'}; text-decoration: ${field.underline ? 'underline' : 'none'}; text-align: ${field.align}; width: ${field.width}px;`;
+                    contentHtml = `<textarea class="pdf-field-input" placeholder="Type..." style="${styles}" rows="1">${field.text}</textarea>`;
+                } else if (field.type === 'image') {
+                    contentHtml = `
+                        <div class="pdf-image-wrapper" style="width: ${field.width}px; height: ${field.height}px;">
+                            <img src="${field.src}" />
+                            <div class="resize-handle nw" data-handle="nw"></div>
+                            <div class="resize-handle ne" data-handle="ne"></div>
+                            <div class="resize-handle sw" data-handle="sw"></div>
+                            <div class="resize-handle se" data-handle="se"></div>
+                            <div class="rotate-handle"></div>
+                        </div>`;
+                }
+
+                container.innerHTML = `
+                    <div class="field-controls">
+                        <div class="drag-handle"><i class="fa-solid fa-arrows-up-down-left-right text-xs"></i></div>
+                        <div class="delete-btn"><i class="fa-solid fa-xmark text-xs"></i></div>
+                    </div>
+                    ${contentHtml}
+                `;
+
+                wrapper.appendChild(container);
+                attachWidgetListeners(container, field);
+            });
+            updateHistoryButtons();
+        }
+
+        // --- CORE LOGIC: DRAG, RESIZE, ROTATE ---
+        function attachWidgetListeners(container, fieldData) {
+            const id = fieldData.id;
+            const input = container.querySelector('.pdf-field-input');
+            const dragHandle = container.querySelector('.drag-handle');
+            const rotateHandle = container.querySelector('.rotate-handle');
+            const resizeHandles = container.querySelectorAll('.resize-handle');
+
+            if (input) {
+                input.addEventListener('focus', () => setActiveField(id));
+                input.addEventListener('click', e => e.stopPropagation());
+                input.addEventListener('input', e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; });
+                input.addEventListener('blur', () => saveState());
+            }
+            if (fieldData.type === 'image') {
+                container.querySelector('.pdf-image-wrapper').addEventListener('mousedown', () => setActiveField(id));
+            }
+
+            container.querySelector('.delete-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                const fields = getFields(); fields.splice(fields.findIndex(f => f.id === id), 1);
+                setActiveField(null); saveState(); renderStateToDOM();
+            });
+
+            // Universal Drag
+            dragHandle.addEventListener('mousedown', (e) => {
+                e.preventDefault(); setActiveField(id);
+                const rect = container.getBoundingClientRect();
+                const offsetX = e.clientX - rect.left; const offsetY = e.clientY - rect.top;
+
+                const onMove = (ev) => {
+                    const wr = wrapper.getBoundingClientRect();
+                    const stateField = getActiveFieldRef(id); // ALWAYS modify the active state directly
+                    stateField.x = ev.clientX - wr.left - offsetX;
+                    stateField.y = ev.clientY - wr.top - offsetY;
+                    container.style.left = `${stateField.x}px`; container.style.top = `${stateField.y}px`;
+                };
+                const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); saveState(); };
+                document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+            });
+
+            // 4-Way Resize
+            resizeHandles.forEach(handle => {
+                handle.addEventListener('mousedown', (e) => {
+                    e.preventDefault(); e.stopPropagation(); setActiveField(id);
+                    const stateField = getActiveFieldRef(id);
+                    const startX = e.clientX; const startY = e.clientY;
+                    const startW = stateField.width; const startH = stateField.height;
+                    const startLeft = stateField.x; const startTop = stateField.y;
+                    const type = handle.dataset.handle;
+                    const wrapperEl = container.querySelector('.pdf-image-wrapper');
+
+                    // Math to reverse the visual rotation to figure out true X/Y deltas
+                    const rad = -(stateField.rotation || 0) * Math.PI / 180;
+                    const cos = Math.cos(rad); const sin = Math.sin(rad);
+
+                    const onMove = (ev) => {
+                        // Calculate un-rotated mouse movement relative to the box
+                        const mouseDx = ev.clientX - startX; const mouseDy = ev.clientY - startY;
+                        const dx = mouseDx * cos - mouseDy * sin;
+                        const dy = mouseDx * sin + mouseDy * cos;
+
+                        let newW = startW, newH = startH, newX = startLeft, newY = startTop;
+
+                        if (type === 'se') { newW = startW + dx; newH = startH + dy; }
+                        else if (type === 'sw') { newW = startW - dx; newH = startH + dy; newX = startLeft + dx; }
+                        else if (type === 'ne') { newW = startW + dx; newH = startH - dy; newY = startTop + dy; }
+                        else if (type === 'nw') { newW = startW - dx; newH = startH - dy; newX = startLeft + dx; newY = startTop + dy; }
+
+                        // Prevent collapsing
+                        if (newW > 20 && newH > 20) {
+                            stateField.width = newW; stateField.height = newH;
+                            stateField.x = newX; stateField.y = newY;
+                            wrapperEl.style.width = `${newW}px`; wrapperEl.style.height = `${newH}px`;
+                            container.style.left = `${newX}px`; container.style.top = `${newY}px`;
+                        }
+                    };
+                    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); saveState(); };
+                    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+                });
+            });
+
+            // Rotation
+            if (rotateHandle) {
+                rotateHandle.addEventListener('mousedown', (e) => {
+                    e.preventDefault(); e.stopPropagation(); setActiveField(id);
+                    const stateField = getActiveFieldRef(id);
+                    
+                    const onMove = (ev) => {
+                        const rect = container.getBoundingClientRect();
+                        // Find true center of element on screen
+                        const cx = rect.left + rect.width / 2;
+                        const cy = rect.top + rect.height / 2;
+                        // Calculate angle to mouse
+                        const angle = Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI;
+                        stateField.rotation = angle + 90; // +90 because handle is at the top
+                        container.style.transform = `rotate(${stateField.rotation}deg)`;
+                    };
+                    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); saveState(); };
+                    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp);
+                });
+            }
+        }
+
+        // --- FORMATTING UI ---
+        function setActiveField(id) {
+            activeFieldId = id;
+            document.querySelectorAll('.pdf-field-container').forEach(el => el.classList.remove('active'));
+            const tb = document.getElementById('formatting-toolbar');
+            if (id) {
+                const field = getActiveFieldRef(id);
+                document.getElementById(id).classList.add('active');
+                if (field.type === 'text') {
+                    tb.classList.remove('hidden');
+                    document.getElementById('font-size-input').value = field.fontSize; document.getElementById('color-input').value = field.color;
+                    document.querySelectorAll('.format-toggle').forEach(btn => btn.classList.toggle('active', field[btn.dataset.format]));
+                    document.querySelectorAll('.align-toggle').forEach(btn => btn.classList.toggle('active', field.align === btn.dataset.align));
+                } else tb.classList.add('hidden');
+            } else tb.classList.add('hidden');
+        }
+
+        document.querySelectorAll('.format-toggle').forEach(btn => btn.addEventListener('click', () => {
+            if(!activeFieldId) return; getActiveFieldRef(activeFieldId)[btn.dataset.format] = !getActiveFieldRef(activeFieldId)[btn.dataset.format]; saveState(); renderStateToDOM();
+        }));
+        document.querySelectorAll('.align-toggle').forEach(btn => btn.addEventListener('click', () => {
+            if(!activeFieldId) return; getActiveFieldRef(activeFieldId).align = btn.dataset.align; saveState(); renderStateToDOM();
+        }));
+        document.getElementById('font-size-input').addEventListener('change', (e) => { if(!activeFieldId) return; getActiveFieldRef(activeFieldId).fontSize = parseInt(e.target.value); saveState(); renderStateToDOM(); });
+        document.getElementById('color-input').addEventListener('change', (e) => { if(!activeFieldId) return; getActiveFieldRef(activeFieldId).color = e.target.value; saveState(); renderStateToDOM(); });
+        document.addEventListener('click', (e) => { if (activeFieldId && !e.target.closest('.pdf-field-container') && e.target !== canvas && !e.target.closest('header')) setActiveField(null); });
+
+        // --- EXPORT TO PDF (WITH ROTATION MATH) ---
+        function hexToRgbObj(hex) { return { r: parseInt(hex.slice(1, 3), 16) / 255, g: parseInt(hex.slice(3, 5), 16) / 255, b: parseInt(hex.slice(5, 7), 16) / 255 }; }
+
+        document.getElementById('download-btn').addEventListener('click', async (e) => {
+            const btn = e.currentTarget; const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin sm:mr-1"></i> <span class="hidden sm:inline">Exporting...</span>';
+            btn.disabled = true;
+
+            try {
+                setActiveField(null);
+                const { PDFDocument, rgb, StandardFonts, degrees } = PDFLib;
+                const pdfDocEdit = await PDFDocument.load(pdfBytes);
+                if (window.fontkit) pdfDocEdit.registerFontkit(window.fontkit);
+
+                const fontRegular = await pdfDocEdit.embedFont(StandardFonts.Helvetica);
+                const fontBold = await pdfDocEdit.embedFont(StandardFonts.HelveticaBold);
+                const fontItalic = await pdfDocEdit.embedFont(StandardFonts.HelveticaOblique);
+                const fontBoldItalic = await pdfDocEdit.embedFont(StandardFonts.HelveticaBoldOblique);
+
+                let customFont;
+                try { customFont = await pdfDocEdit.embedFont(await fetch('./NotoSansGurmukhi-VariableFont_wdth,wght.ttf').then(r => r.arrayBuffer())); } 
+                catch(e) { customFont = fontRegular; }
+
+                const pages = pdfDocEdit.getPages();
+
+                for (const field of getFields()) {
+                    const page = pages[field.page - 1];
+                    const pageHeight = page.getHeight();
+
+                    if (field.type === 'text' && field.text.trim()) {
+                        let activeFont = customFont;
+                        if(customFont === fontRegular) {
+                            if (field.bold && field.italic) activeFont = fontBoldItalic; else if (field.bold) activeFont = fontBold; else if (field.italic) activeFont = fontItalic;
+                        }
+                        const lines = field.text.split('\n'); const lineHeight = field.fontSize * 1.2; const cRgb = hexToRgbObj(field.color);
+                        let currentY = pageHeight - (field.y / scale) - (field.fontSize/scale);
+
+                        for(let i = 0; i < lines.length; i++) {
+                            const lineText = lines[i]; const textWidth = activeFont.widthOfTextAtSize(lineText, field.fontSize / scale);
+                            let alignOffset = 0; const containerPdfWidth = field.width / scale;
+                            if (field.align === 'center') alignOffset = (containerPdfWidth - textWidth) / 2;
+                            if (field.align === 'right') alignOffset = containerPdfWidth - textWidth;
+                            
+                            const finalX = (field.x / scale) + alignOffset;
+                            page.drawText(lineText, { x: finalX, y: currentY, size: field.fontSize / scale, font: activeFont, color: rgb(cRgb.r, cRgb.g, cRgb.b) });
+                            if (field.underline) page.drawLine({ start: { x: finalX, y: currentY - 2 }, end: { x: finalX + textWidth, y: currentY - 2 }, thickness: 1, color: rgb(cRgb.r, cRgb.g, cRgb.b) });
+                            currentY -= (lineHeight / scale);
+                        }
+                    } 
+                    else if (field.type === 'image') {
+                        const imgBytes = await fetch(field.src).then(r => r.arrayBuffer());
+                        const pdfImage = field.src.includes('image/jpeg') ? await pdfDocEdit.embedJpg(imgBytes) : await pdfDocEdit.embedPng(imgBytes);
+
+                        const pdfWidth = field.width / scale;
+                        const pdfHeight = field.height / scale;
+                        const rotationDeg = field.rotation || 0;
+
+                        // Advanced Math: PDF-lib rotates around the BOTTOM-LEFT corner.
+                        // Browsers rotate around the CENTER. 
+                        // To perfectly match them, we must mathematically shift the X/Y coordinates 
+                        // in the PDF to simulate a center-rotation.
+                        
+                        const centerX = (field.x / scale) + (pdfWidth / 2);
+                        const centerY = pageHeight - (field.y / scale) - (pdfHeight / 2);
+                        
+                        // Convert rotation to radians (negative because PDF Y-axis is inverted)
+                        const rad = -rotationDeg * Math.PI / 180;
+                        const cos = Math.cos(rad);
+                        const sin = Math.sin(rad);
+
+                        // Distance from center to bottom-left in unrotated space
+                        const dx = -pdfWidth / 2;
+                        const dy = -pdfHeight / 2;
+
+                        // Rotate that vector
+                        const rotatedDx = dx * cos - dy * sin;
+                        const rotatedDy = dx * sin + dy * cos;
+
+                        // New bottom-left coordinate for the PDF engine
+                        const finalPdfX = centerX + rotatedDx;
+                        const finalPdfY = centerY + rotatedDy;
+                        
+                        page.drawImage(pdfImage, {
+                            x: finalPdfX,
+                            y: finalPdfY,
+                            width: pdfWidth,
+                            height: pdfHeight,
+                            rotate: degrees(-rotationDeg) // Inverse rotation for PDF coordinate plane
+                        });
+                    }
+                }
+
+                const blob = new Blob([await pdfDocEdit.save()], { type: 'application/pdf' });
+                const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'Pro_Edited_Document.pdf';
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+
+            } catch (error) { console.error(error); alert("Export Failed: " + error.message); } 
+            finally { btn.innerHTML = originalText; btn.disabled = false; }
+        });
+    </script>
+</body>
+</html>
