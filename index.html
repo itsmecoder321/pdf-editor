@@ -3,572 +3,1824 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mere Pyare Jiju</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>PDF Studio Pro</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Gurmukhi:wght@100..900&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/regenerator-runtime@0.14.1/runtime.min.js"></script>
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <script src="https://unpkg.com/@pdf-lib/fontkit/dist/fontkit.umd.min.js"></script>
-
     <style>
-        body { background-color: #f3f4f6; }
-        #main-viewer {
-            position: relative; overflow: auto; -webkit-overflow-scrolling: touch;
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --surface2: #22263a;
+            --border: #2e3250;
+            --accent: #5b6ef5;
+            --accent2: #8b5cf6;
+            --green: #10b981;
+            --red: #ef4444;
+            --yellow: #f59e0b;
+            --text: #e2e8f0;
+            --muted: #64748b;
+            --toolbar-h: 56px;
+            --sidebar-w: 260px;
         }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* Gurmukhi / Punjabi font alias */
+        @font-face {
+            font-family: 'NotoSansGurmukhi';
+            src: local('Noto Sans Gurmukhi');
+        }
+        /* Ensure Gurmukhi renders in textareas */
+        .pdf-field-input[data-gurmukhi="true"],
+        .gurmukhi { font-family: 'Noto Sans Gurmukhi', 'NotoSansGurmukhi', serif !important; }
+
+        /* ---- HEADER ---- */
+        #header {
+            height: var(--toolbar-h); background: var(--surface); border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 8px; padding: 0 12px; flex-shrink: 0; z-index: 100;
+            flex-wrap: wrap;
+        }
+        .logo { font-weight: 800; font-size: 15px; color: var(--accent); letter-spacing: -0.5px; margin-right: 4px; white-space: nowrap; }
+        .logo span { color: var(--text); }
+        .hbtn {
+            background: transparent; border: 1px solid transparent; color: var(--muted); border-radius: 6px;
+            padding: 5px 10px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 5px;
+            transition: all .15s; white-space: nowrap;
+        }
+        .hbtn:hover { background: var(--surface2); border-color: var(--border); color: var(--text); }
+        .hbtn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .hbtn.primary:hover { background: #4a5de0; }
+        .hbtn.success { background: var(--green); color: #fff; border-color: var(--green); }
+        .hbtn:disabled { opacity: .35; cursor: not-allowed; }
+        .hbtn.active { background: var(--surface2); color: var(--accent); border-color: var(--accent); }
+        .hdivider { width: 1px; height: 24px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
+        .hsep { flex: 1; }
+
+        /* ---- TOOLBAR ---- */
+        #toolbar {
+            background: var(--surface); border-bottom: 1px solid var(--border);
+            display: none; align-items: center; gap: 6px; padding: 6px 12px; flex-shrink: 0;
+            flex-wrap: wrap;
+        }
+        #toolbar.visible { display: flex; }
+        .tlabel { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+        .tbtn {
+            background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+            border-radius: 5px; padding: 4px 8px; font-size: 12px; cursor: pointer;
+            display: flex; align-items: center; gap: 4px; transition: all .15s;
+        }
+        .tbtn:hover { color: var(--text); border-color: var(--accent); }
+        .tbtn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .tinput {
+            background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+            border-radius: 5px; padding: 4px 7px; font-size: 12px; outline: none; width: 56px;
+        }
+        .tinput:focus { border-color: var(--accent); }
+        .tcolor { width: 28px; height: 28px; border-radius: 5px; border: 2px solid var(--border); cursor: pointer; padding: 1px; background: transparent; }
+        select.tinput { width: auto; cursor: pointer; }
+
+        /* ---- LAYOUT ---- */
+        #layout { display: flex; flex: 1; overflow: hidden; }
+
+        /* ---- SIDEBAR ---- */
+        #sidebar {
+            width: var(--sidebar-w); background: var(--surface); border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden;
+        }
+        #sidebar-tabs { display: flex; border-bottom: 1px solid var(--border); }
+        .stab {
+            flex: 1; padding: 8px 4px; font-size: 11px; text-align: center; cursor: pointer;
+            color: var(--muted); border-bottom: 2px solid transparent; transition: all .15s;
+        }
+        .stab.active { color: var(--accent); border-color: var(--accent); }
+        #sidebar-content { flex: 1; overflow-y: auto; padding: 10px; }
+        #sidebar-content::-webkit-scrollbar { width: 4px; }
+        #sidebar-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        .sprop-group { margin-bottom: 14px; }
+        .sprop-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; display: block; }
+        .sprop-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+        .sprop-input {
+            background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+            border-radius: 5px; padding: 5px 8px; font-size: 12px; outline: none; width: 100%;
+        }
+        .sprop-input:focus { border-color: var(--accent); }
+        .sprop-btn {
+            background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+            border-radius: 5px; padding: 5px 8px; font-size: 11px; cursor: pointer; transition: all .15s;
+            display: flex; align-items: center; gap: 4px; white-space: nowrap;
+        }
+        .sprop-btn:hover { color: var(--text); border-color: var(--accent); }
+        .sprop-btn.danger:hover { color: var(--red); border-color: var(--red); }
+
+        /* layers panel */
+        .layer-item {
+            display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 6px;
+            cursor: pointer; font-size: 12px; margin-bottom: 3px; border: 1px solid transparent;
+        }
+        .layer-item:hover { background: var(--surface2); }
+        .layer-item.active { background: var(--surface2); border-color: var(--accent); color: var(--accent); }
+        .layer-icon { width: 22px; text-align: center; color: var(--muted); font-size: 11px; }
+        .layer-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .layer-vis { color: var(--muted); font-size: 11px; cursor: pointer; }
+
+        /* pages thumbnail */
+        .page-thumb {
+            border: 2px solid var(--border); border-radius: 6px; cursor: pointer;
+            margin-bottom: 8px; overflow: hidden; background: #fff; transition: all .15s;
+        }
+        .page-thumb.active { border-color: var(--accent); }
+        .page-thumb canvas { width: 100%; display: block; }
+        .page-thumb-label { text-align: center; font-size: 10px; color: var(--muted); padding: 3px; background: var(--surface); }
+
+        /* ---- CANVAS AREA ---- */
+        #main-area { flex: 1; overflow: auto; background: var(--bg); display: flex; justify-content: center; align-items: flex-start; padding: 32px; position: relative; }
+        #main-area::-webkit-scrollbar { width: 8px; height: 8px; }
+        #main-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        #empty-state {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100%; width: 100%; color: var(--muted); text-align: center; gap: 14px;
+        }
+        .empty-icon { font-size: 64px; color: var(--border); }
+        .empty-title { font-size: 20px; font-weight: 600; color: #475569; }
+        .empty-sub { font-size: 13px; color: var(--muted); }
+        .empty-drop {
+            border: 2px dashed var(--border); border-radius: 12px; padding: 28px 48px;
+            cursor: pointer; transition: all .2s; margin-top: 8px;
+        }
+        .empty-drop:hover { border-color: var(--accent); color: var(--accent); }
+
         #pdf-wrapper {
-            position: relative; display: inline-block;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); background: white;
-            margin: 20px auto; transform-origin: top left;
+            position: relative; display: inline-block; background: white;
+            box-shadow: 0 20px 60px rgba(0,0,0,.5); flex-shrink: 0;
         }
-        canvas { display: block; }
-        
-        .pdf-field-container { position: absolute; z-index: 50; }
-        
-        .pdf-field-input {
-            background: transparent; border: 1px dashed transparent; color: #000;
-            font-family: sans-serif; padding: 2px 4px; outline: none;
-            min-width: 50px; white-space: pre-wrap; transition: border 0.2s;
-            resize: horizontal; overflow: hidden;
-        }
-        
-        .pdf-image-wrapper {
-            border: 2px dashed transparent; position: relative;
-            box-sizing: border-box; user-select: none;
-            touch-action: none; /* Crucial for mobile dragging */
-        }
-        .pdf-image-wrapper img {
-            width: 100%; height: 100%; object-fit: fill; pointer-events: none;
-        }
+        canvas#pdf-canvas { display: block; }
 
-        /* UPGRADE: 4-Way Resize Handles (Made Larger for Mobile Touch) */
-        .resize-handle {
-            position: absolute; width: 24px; height: 24px;
-            background: white; border: 2px solid #3b82f6; border-radius: 50%;
-            display: none; z-index: 10; touch-action: none;
-        }
-        .pdf-field-container.active .resize-handle { display: block; }
-        .resize-handle.nw { top: -12px; left: -12px; cursor: nwse-resize; }
-        .resize-handle.ne { top: -12px; right: -12px; cursor: nesw-resize; }
-        .resize-handle.sw { bottom: -12px; left: -12px; cursor: nesw-resize; }
-        .resize-handle.se { bottom: -12px; right: -12px; cursor: nwse-resize; }
-
-        /* UPGRADE: Rotation Handle (Made Larger for Mobile Touch) */
-        .rotate-handle {
-            position: absolute; top: -45px; left: 50%; transform: translateX(-50%);
-            width: 24px; height: 24px; background: #10b981; border-radius: 50%;
-            cursor: grab; display: none; z-index: 10; touch-action: none;
-        }
-        .rotate-handle::after {
-            content: ''; position: absolute; width: 2px; height: 25px;
-            background: #10b981; top: 20px; left: 11px;
-        }
-        .rotate-handle:active { cursor: grabbing; }
-        .pdf-field-container.active .rotate-handle { display: block; }
-
-        .pdf-field-container:hover .pdf-field-input,
-        .pdf-field-container.active .pdf-field-input,
-        .pdf-field-container.active .pdf-image-wrapper {
-            border-color: #3b82f6; background: rgba(255, 255, 255, 0.3);
+        /* ---- FIELD ELEMENTS ---- */
+        .pdf-field-container {
+            position: absolute; z-index: 50; user-select: none; touch-action: none;
         }
         .pdf-field-container.active { z-index: 60; }
-        
+        .pdf-field-container.locked { opacity: .6; pointer-events: none; }
+        .pdf-field-container.hidden-layer { opacity: 0; pointer-events: none; }
+
+        .pdf-field-input {
+            background: transparent; border: 1px dashed transparent; color: #000;
+            font-family: sans-serif; padding: 3px 5px; outline: none;
+            min-width: 50px; white-space: pre-wrap; transition: border .15s;
+            resize: none; overflow: hidden; cursor: text; line-height: 1.4;
+        }
+        .pdf-field-container:hover .pdf-field-input,
+        .pdf-field-container.active .pdf-field-input { border-color: #3b82f6; background: rgba(59,130,246,.06); }
+
+        .pdf-image-wrapper {
+            border: 2px dashed transparent; position: relative;
+            box-sizing: border-box; touch-action: none; overflow: hidden;
+        }
+        .pdf-image-wrapper img { width: 100%; height: 100%; object-fit: fill; pointer-events: none; display: block; }
+        .pdf-field-container:hover .pdf-image-wrapper,
+        .pdf-field-container.active .pdf-image-wrapper { border-color: #3b82f6; }
+
+        /* shape element */
+        .pdf-shape-wrapper {
+            border: 2px dashed transparent; position: relative; box-sizing: border-box;
+            touch-action: none; display: flex; align-items: center; justify-content: center;
+        }
+        .pdf-field-container:hover .pdf-shape-wrapper,
+        .pdf-field-container.active .pdf-shape-wrapper { border-color: #3b82f6; }
+        .pdf-shape-inner { width: 100%; height: 100%; }
+
+        /* Resize handles */
+        .resize-handle {
+            position: absolute; width: 10px; height: 10px; background: white;
+            border: 2px solid #3b82f6; border-radius: 2px; display: none; z-index: 10; touch-action: none;
+        }
+        .pdf-field-container.active .resize-handle { display: block; }
+        .resize-handle.nw { top:-5px; left:-5px; cursor:nwse-resize; }
+        .resize-handle.n  { top:-5px; left:calc(50% - 5px); cursor:ns-resize; }
+        .resize-handle.ne { top:-5px; right:-5px; cursor:nesw-resize; }
+        .resize-handle.e  { top:calc(50% - 5px); right:-5px; cursor:ew-resize; }
+        .resize-handle.se { bottom:-5px; right:-5px; cursor:nwse-resize; }
+        .resize-handle.s  { bottom:-5px; left:calc(50% - 5px); cursor:ns-resize; }
+        .resize-handle.sw { bottom:-5px; left:-5px; cursor:nesw-resize; }
+        .resize-handle.w  { top:calc(50% - 5px); left:-5px; cursor:ew-resize; }
+
+        /* Rotate handle */
+        .rotate-handle {
+            position: absolute; top: -38px; left: 50%; transform: translateX(-50%);
+            width: 20px; height: 20px; background: var(--green); border-radius: 50%;
+            cursor: grab; display: none; z-index: 10; touch-action: none;
+            display: flex; align-items: center; justify-content: center; color: white; font-size: 10px;
+        }
+        .rotate-handle::before { content: ''; position: absolute; width: 2px; height: 20px; background: var(--green); top: 18px; left: 9px; }
+        .rotate-handle:active { cursor: grabbing; }
+        .pdf-field-container.active .rotate-handle { display: flex; }
+
+        /* Duplicate handle */
+        .dup-handle {
+            position: absolute; top: -38px; right: 0;
+            width: 20px; height: 20px; background: var(--accent); border-radius: 50%;
+            cursor: pointer; display: none; z-index: 10;
+            align-items: center; justify-content: center; color: white; font-size: 10px;
+        }
+        .pdf-field-container.active .dup-handle { display: flex; }
+
+        /* Field controls bar */
         .field-controls {
-            display: none; position: absolute; top: -35px; left: 0;
-            width: 100%; justify-content: space-between; z-index: 20;
+            display: none; position: absolute; top: -35px; left: 0; right: 0;
+            justify-content: space-between; z-index: 20; gap: 3px;
         }
         .pdf-field-container.active .field-controls { display: flex; }
-        
-        .drag-handle, .delete-btn {
-            background: white; border: 1px solid #e5e7eb; border-radius: 4px;
-            width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1); color: #4b5563; touch-action: none;
+        .fc-btn {
+            background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+            width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; color: var(--muted); font-size: 10px; touch-action: none; transition: all .15s;
         }
-        .drag-handle { cursor: grab; }
-        .drag-handle:active { cursor: grabbing; }
-        .delete-btn { cursor: pointer; color: #ef4444; }
-        .delete-btn:hover { background: #fee2e2; }
+        .fc-btn:hover { color: var(--text); border-color: var(--accent); }
+        .fc-btn.danger:hover { color: var(--red); border-color: var(--red); }
+        .fc-btn.drag { cursor: grab; }
+        .fc-btn.drag:active { cursor: grabbing; }
 
-        .format-btn { padding: 4px 8px; border-radius: 4px; cursor: pointer; color: #4b5563; }
-        .format-btn.active { background: #dbeafe; color: #2563eb; }
-        .format-btn:hover:not(.active) { background: #f3f4f6; }
+        /* ---- ZOOM BAR ---- */
+        #zoom-bar {
+            position: fixed; bottom: 16px; right: 16px; background: var(--surface);
+            border: 1px solid var(--border); border-radius: 8px; display: none;
+            align-items: center; gap: 4px; padding: 6px 10px; z-index: 200; box-shadow: 0 4px 16px rgba(0,0,0,.4);
+        }
+        #zoom-bar.visible { display: flex; }
+        .zbtn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 5px; width: 28px; height: 28px; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+        .zbtn:hover { border-color: var(--accent); }
+        #zoom-label { font-size: 12px; color: var(--muted); min-width: 40px; text-align: center; }
+
+        /* ---- PAGE NAV ---- */
+        #page-nav {
+            position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+            background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+            display: none; align-items: center; gap: 8px; padding: 6px 14px; z-index: 200;
+            box-shadow: 0 4px 16px rgba(0,0,0,.4);
+        }
+        #page-nav.visible { display: flex; }
+        .pnbtn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 2px 6px; border-radius: 4px; }
+        .pnbtn:hover { color: var(--text); background: var(--surface2); }
+        #page-input { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 2px 6px; font-size: 12px; outline: none; width: 36px; text-align: center; }
+
+        /* ---- CONTEXT MENU ---- */
+        #ctx-menu {
+            position: fixed; background: var(--surface); border: 1px solid var(--border);
+            border-radius: 8px; padding: 4px; z-index: 500; display: none;
+            box-shadow: 0 8px 24px rgba(0,0,0,.5); min-width: 170px;
+        }
+        .cm-item {
+            display: flex; align-items: center; gap: 8px; padding: 7px 10px; font-size: 12px;
+            cursor: pointer; border-radius: 5px; color: var(--text); transition: all .1s;
+        }
+        .cm-item:hover { background: var(--surface2); color: var(--accent); }
+        .cm-item.danger:hover { color: var(--red); }
+        .cm-item i { width: 14px; text-align: center; color: var(--muted); }
+        .cm-sep { height: 1px; background: var(--border); margin: 3px 0; }
+
+        /* ---- MODALS ---- */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 1000;
+            display: none; align-items: center; justify-content: center;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal {
+            background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+            padding: 24px; max-width: 480px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,.6);
+        }
+        .modal h3 { font-size: 16px; font-weight: 700; margin-bottom: 14px; }
+        .modal-input {
+            background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+            border-radius: 7px; padding: 8px 12px; font-size: 13px; outline: none; width: 100%; margin-bottom: 10px;
+        }
+        .modal-input:focus { border-color: var(--accent); }
+        .modal-row { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+        .modal-btn {
+            padding: 7px 16px; border-radius: 7px; font-size: 13px; cursor: pointer; border: none; font-weight: 600;
+        }
+        .modal-btn.cancel { background: var(--surface2); color: var(--text); }
+        .modal-btn.ok { background: var(--accent); color: #fff; }
+
+        /* ---- TOAST ---- */
+        #toast {
+            position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%);
+            background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+            padding: 9px 18px; font-size: 12px; z-index: 300; opacity: 0;
+            transition: opacity .3s; pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,.4);
+        }
+        #toast.show { opacity: 1; }
+
+        /* ---- RULERS ---- */
+        #ruler-h, #ruler-v {
+            position: absolute; background: var(--surface); z-index: 10;
+            display: none; pointer-events: none;
+        }
+        #ruler-h { top: 0; left: 20px; right: 0; height: 20px; border-bottom: 1px solid var(--border); }
+        #ruler-v { top: 20px; left: 0; bottom: 0; width: 20px; border-right: 1px solid var(--border); }
+
+        /* ---- SELECTION BOX ---- */
+        #selection-box {
+            position: absolute; border: 1px dashed #3b82f6; background: rgba(59,130,246,.08);
+            pointer-events: none; display: none; z-index: 55;
+        }
+
+        /* ---- LOADING ---- */
+        #loading-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,.8); z-index: 2000;
+            display: none; align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+        }
+        #loading-overlay.open { display: flex; }
+        .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ---- GRID OVERLAY ---- */
+        .grid-bg {
+            background-image: linear-gradient(rgba(59,130,246,.08) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(59,130,246,.08) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        /* SCROLLBARS */
+        #main-area::-webkit-scrollbar { width: 8px; height: 8px; }
+        #main-area::-webkit-scrollbar-track { background: var(--bg); }
+        #main-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+        /* RESPONSIVE */
+        @media (max-width: 768px) {
+            #sidebar { display: none; }
+           :root{ --sidebar-w: 0px;}
+            #header { gap: 4px; }
+        }
+
+        /* drag over */
+        .drag-over { outline: 3px dashed var(--accent) !important; }
     </style>
 </head>
-<body class="flex flex-col h-screen overflow-hidden text-gray-800">
+<body>
 
-    <header class="bg-white shadow-sm px-4 py-3 flex flex-wrap justify-between items-center z-20 gap-4">
-        <div class="flex items-center gap-3">
-            <i class="fa-solid fa-file-pdf text-red-500 text-2xl"></i>
-            <h1 class="text-xl font-bold hidden xl:block">Mere Pyare Jiju</h1>
+<!-- HEADER -->
+<div id="header">
+    <div class="logo">PDF<span>Studio</span> <span style="color:var(--yellow);font-size:10px;vertical-align:top;">PRO</span></div>
+    <div class="hdivider"></div>
+
+    <!-- File ops -->
+    <label class="hbtn" title="Open PDF">
+        <i class="fa-solid fa-folder-open"></i> <span class="hidden-sm">Open</span>
+        <input type="file" id="upload-pdf" accept="application/pdf" class="hidden" style="display:none">
+    </label>
+    <button class="hbtn" id="btn-new-page" title="New blank page" style="display:none"><i class="fa-regular fa-file-plus"></i></button>
+    <div class="hdivider"></div>
+
+    <!-- Undo/Redo -->
+    <button class="hbtn" id="undo-btn" disabled title="Undo (Ctrl+Z)"><i class="fa-solid fa-rotate-left"></i></button>
+    <button class="hbtn" id="redo-btn" disabled title="Redo (Ctrl+Y)"><i class="fa-solid fa-rotate-right"></i></button>
+    <div class="hdivider"></div>
+
+    <!-- Tools -->
+    <button class="hbtn" id="tool-select" title="Select tool (V)" data-tool="select"><i class="fa-solid fa-arrow-pointer"></i></button>
+    <button class="hbtn active" id="tool-text" title="Text tool (T)" data-tool="text"><i class="fa-solid fa-text-height"></i></button>
+    <label class="hbtn" id="tool-image" title="Add Image"><i class="fa-regular fa-image"></i> <span class="hidden-sm">Image</span><input type="file" id="upload-image" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" style="display:none" multiple></label>
+    <button class="hbtn" id="tool-shape" title="Shapes"><i class="fa-regular fa-shapes"></i></button>
+    <div class="hdivider"></div>
+
+    <!-- View -->
+    <button class="hbtn" id="btn-grid" title="Toggle grid"><i class="fa-solid fa-hashtag"></i></button>
+    <button class="hbtn" id="btn-ruler" title="Toggle rulers"><i class="fa-solid fa-ruler-combined"></i></button>
+    <button class="hbtn" id="btn-sidebar" title="Toggle sidebar"><i class="fa-solid fa-sidebar"></i></button>
+    <div class="hdivider"></div>
+
+    <div class="hsep"></div>
+
+    <!-- Actions -->
+    <button class="hbtn" id="btn-select-all" title="Select all (Ctrl+A)"><i class="fa-solid fa-object-group"></i></button>
+    <button class="hbtn" id="btn-clear-all" title="Clear all elements"><i class="fa-solid fa-eraser"></i></button>
+    <button class="hbtn success" id="download-btn" title="Export PDF" style="display:none"><i class="fa-solid fa-download"></i> Export</button>
+</div>
+
+<!-- FORMATTING TOOLBAR -->
+<div id="toolbar">
+    <span class="tlabel">Text</span>
+    <button class="tbtn format-toggle" data-format="bold" title="Bold (Ctrl+B)"><i class="fa-solid fa-bold"></i></button>
+    <button class="tbtn format-toggle" data-format="italic" title="Italic (Ctrl+I)"><i class="fa-solid fa-italic"></i></button>
+    <button class="tbtn format-toggle" data-format="underline" title="Underline"><i class="fa-solid fa-underline"></i></button>
+    <button class="tbtn format-toggle" data-format="strikethrough" title="Strikethrough"><i class="fa-solid fa-strikethrough"></i></button>
+    <div class="hdivider"></div>
+    <button class="tbtn align-toggle active" data-align="left"><i class="fa-solid fa-align-left"></i></button>
+    <button class="tbtn align-toggle" data-align="center"><i class="fa-solid fa-align-center"></i></button>
+    <button class="tbtn align-toggle" data-align="right"><i class="fa-solid fa-align-right"></i></button>
+    <div class="hdivider"></div>
+    <select class="tinput" id="font-family-select" title="Font family">
+        <option value="Helvetica, sans-serif">Helvetica</option>
+        <option value="'Times New Roman', serif">Times New Roman</option>
+        <option value="'Courier New', monospace">Courier New</option>
+        <option value="Georgia, serif">Georgia</option>
+        <option value="Arial, sans-serif">Arial</option>
+        <option value="Verdana, sans-serif">Verdana</option>
+        <option value="'Trebuchet MS', sans-serif">Trebuchet</option>
+        <option value="Impact, sans-serif">Impact</option>
+        <option value="'NotoSansGurmukhi', sans-serif">ਨੋਟੋ ਗੁਰਮੁਖੀ (Punjabi)</option>
+    </select>
+    <input type="number" id="font-size-input" value="16" min="6" max="200" class="tinput" title="Font size" style="width:54px">
+    <input type="color" id="color-input" value="#000000" class="tcolor" title="Text color">
+    <input type="color" id="bgcolor-input" value="#ffffff" class="tcolor" title="Background color">
+    <button class="tbtn" id="btn-bgcolor-toggle" title="Toggle background"><i class="fa-solid fa-fill-drip"></i></button>
+    <div class="hdivider"></div>
+    <input type="number" id="opacity-input" value="100" min="0" max="100" class="tinput" title="Opacity %" style="width:54px">
+    <span class="tlabel">%</span>
+    <div class="hdivider"></div>
+    <button class="tbtn" id="btn-bring-front" title="Bring to front"><i class="fa-solid fa-layer-group"></i></button>
+    <button class="tbtn" id="btn-send-back" title="Send to back"><i class="fa-regular fa-layer-group"></i></button>
+    <div class="hdivider"></div>
+    <button class="tbtn" id="btn-flip-h" title="Flip horizontal"><i class="fa-solid fa-arrows-left-right"></i></button>
+    <button class="tbtn" id="btn-flip-v" title="Flip vertical"><i class="fa-solid fa-arrows-up-down"></i></button>
+    <div class="hdivider"></div>
+    <button class="tbtn" id="btn-lock" title="Lock element"><i class="fa-solid fa-lock"></i></button>
+    <button class="tbtn" id="btn-link" title="Add hyperlink"><i class="fa-solid fa-link"></i></button>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div id="layout">
+    <!-- SIDEBAR -->
+    <div id="sidebar">
+        <div id="sidebar-tabs">
+            <div class="stab active" data-tab="layers">Layers</div>
+            <div class="stab" data-tab="pages">Pages</div>
+            <div class="stab" data-tab="props">Properties</div>
         </div>
-
-        <div class="flex gap-2 border-r pr-4">
-            <button id="undo-btn" class="text-gray-400 hover:text-gray-800 transition disabled:opacity-30" disabled><i class="fa-solid fa-rotate-left"></i></button>
-            <button id="redo-btn" class="text-gray-400 hover:text-gray-800 transition disabled:opacity-30" disabled><i class="fa-solid fa-rotate-right"></i></button>
-        </div>
-
-        <div id="formatting-toolbar" class="hidden flex-1 flex flex-wrap justify-center items-center gap-3 bg-gray-50 px-4 py-1 rounded-lg border border-gray-200">
-            <div class="flex bg-white border rounded">
-                <button class="format-btn format-toggle" data-format="bold"><i class="fa-solid fa-bold"></i></button>
-                <button class="format-btn format-toggle border-l" data-format="italic"><i class="fa-solid fa-italic"></i></button>
-                <button class="format-btn format-toggle border-l" data-format="underline"><i class="fa-solid fa-underline"></i></button>
+        <div id="sidebar-content">
+            <!-- Layers -->
+            <div id="tab-layers">
+                <div id="layers-list"></div>
             </div>
-            <div class="w-px h-6 bg-gray-300"></div>
-            <div class="flex bg-white border rounded">
-                <button class="format-btn align-toggle active" data-align="left"><i class="fa-solid fa-align-left"></i></button>
-                <button class="format-btn align-toggle border-l" data-align="center"><i class="fa-solid fa-align-center"></i></button>
-                <button class="format-btn align-toggle border-l" data-align="right"><i class="fa-solid fa-align-right"></i></button>
+            <!-- Pages -->
+            <div id="tab-pages" style="display:none">
+                <div id="pages-list"></div>
             </div>
-            <div class="w-px h-6 bg-gray-300"></div>
-            <div class="flex items-center gap-2">
-                <input type="number" id="font-size-input" value="16" min="8" max="72" class="w-14 border rounded px-1 py-1 text-sm outline-none">
-                <input type="color" id="color-input" value="#000000" class="w-6 h-6 rounded cursor-pointer border-0 p-0">
+            <!-- Properties -->
+            <div id="tab-props" style="display:none">
+                <div id="props-panel">
+                    <p style="color:var(--muted);font-size:12px;text-align:center;padding-top:20px;">Select an element</p>
+                </div>
             </div>
         </div>
+    </div>
 
-        <div class="flex items-center gap-2 ml-auto">
-            <label class="cursor-pointer bg-green-50 text-green-600 px-3 py-2 rounded-lg font-medium hover:bg-green-100 transition text-sm">
-                <i class="fa-regular fa-image sm:mr-1"></i> <span class="hidden sm:inline">Image</span>
-                <input type="file" id="upload-image" accept="image/png, image/jpeg" class="hidden">
+    <!-- CANVAS AREA -->
+    <div id="main-area">
+        <div id="empty-state">
+            <div class="empty-icon"><i class="fa-solid fa-file-pdf"></i></div>
+            <div class="empty-title">PDF Studio Pro</div>
+            <div class="empty-sub">Advanced PDF editor with 50+ features</div>
+            <label class="empty-drop">
+                <i class="fa-solid fa-cloud-arrow-up" style="font-size:24px;display:block;margin-bottom:8px;"></i>
+                Drop PDF here or click to open
+                <input type="file" accept="application/pdf" id="drop-pdf-input" style="display:none">
             </label>
-            <label class="cursor-pointer bg-blue-50 text-blue-600 px-3 py-2 rounded-lg font-medium hover:bg-blue-100 transition text-sm">
-                <i class="fa-solid fa-upload sm:mr-1"></i> <span class="hidden sm:inline">PDF</span>
-                <input type="file" id="upload-pdf" accept="application/pdf" class="hidden">
-            </label>
-            <button id="download-btn" class="bg-blue-600 text-white px-3 py-2 rounded-lg font-medium hover:bg-blue-700 transition shadow-md hidden text-sm">
-                <i class="fa-solid fa-download sm:mr-1"></i> <span class="hidden sm:inline">Export</span>
+        </div>
+        <div id="pdf-wrapper" style="display:none; position:relative;">
+            <canvas id="pdf-canvas"></canvas>
+            <div id="selection-box"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ZOOM BAR -->
+<div id="zoom-bar">
+    <button class="zbtn" id="zoom-out"><i class="fa-solid fa-minus"></i></button>
+    <span id="zoom-label">100%</span>
+    <button class="zbtn" id="zoom-in"><i class="fa-solid fa-plus"></i></button>
+    <button class="zbtn" id="zoom-fit" title="Fit to width"><i class="fa-solid fa-arrows-left-right"></i></button>
+</div>
+
+<!-- PAGE NAV -->
+<div id="page-nav">
+    <button class="pnbtn" id="prev-page"><i class="fa-solid fa-chevron-left"></i></button>
+    <input type="number" id="page-input" value="1" min="1">
+    <span style="font-size:12px;color:var(--muted);">/ <span id="total-pages">0</span></span>
+    <button class="pnbtn" id="next-page"><i class="fa-solid fa-chevron-right"></i></button>
+</div>
+
+<!-- CONTEXT MENU -->
+<div id="ctx-menu">
+    <div class="cm-item" id="cm-duplicate"><i class="fa-regular fa-copy"></i> Duplicate</div>
+    <div class="cm-item" id="cm-copy"><i class="fa-solid fa-copy"></i> Copy</div>
+    <div class="cm-item" id="cm-paste"><i class="fa-solid fa-paste"></i> Paste</div>
+    <div class="cm-sep"></div>
+    <div class="cm-item" id="cm-lock"><i class="fa-solid fa-lock"></i> Lock/Unlock</div>
+    <div class="cm-item" id="cm-hide"><i class="fa-solid fa-eye-slash"></i> Hide</div>
+    <div class="cm-sep"></div>
+    <div class="cm-item" id="cm-front"><i class="fa-solid fa-layer-group"></i> Bring to Front</div>
+    <div class="cm-item" id="cm-back"><i class="fa-regular fa-layer-group"></i> Send to Back</div>
+    <div class="cm-sep"></div>
+    <div class="cm-item" id="cm-align-center-h"><i class="fa-solid fa-align-center"></i> Center Horizontal</div>
+    <div class="cm-item" id="cm-align-center-v"><i class="fa-solid fa-grip-lines"></i> Center Vertical</div>
+    <div class="cm-sep"></div>
+    <div class="cm-item danger" id="cm-delete"><i class="fa-solid fa-trash"></i> Delete</div>
+</div>
+
+<!-- SHAPE PICKER MODAL -->
+<div class="modal-overlay" id="shape-modal">
+    <div class="modal">
+        <h3><i class="fa-regular fa-shapes"></i> Insert Shape</h3>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;">
+            <button class="sprop-btn shape-pick" data-shape="rect" style="flex-direction:column;padding:12px;">
+                <i class="fa-regular fa-square" style="font-size:20px;margin-bottom:4px;"></i> Rectangle
+            </button>
+            <button class="sprop-btn shape-pick" data-shape="circle" style="flex-direction:column;padding:12px;">
+                <i class="fa-regular fa-circle" style="font-size:20px;margin-bottom:4px;"></i> Circle
+            </button>
+            <button class="sprop-btn shape-pick" data-shape="line" style="flex-direction:column;padding:12px;">
+                <i class="fa-solid fa-minus" style="font-size:20px;margin-bottom:4px;"></i> Line
+            </button>
+            <button class="sprop-btn shape-pick" data-shape="arrow" style="flex-direction:column;padding:12px;">
+                <i class="fa-solid fa-arrow-right" style="font-size:20px;margin-bottom:4px;"></i> Arrow
+            </button>
+            <button class="sprop-btn shape-pick" data-shape="triangle" style="flex-direction:column;padding:12px;">
+                <i class="fa-solid fa-play" style="font-size:20px;margin-bottom:4px;transform:rotate(-90deg)"></i> Triangle
+            </button>
+            <button class="sprop-btn shape-pick" data-shape="star" style="flex-direction:column;padding:12px;">
+                <i class="fa-regular fa-star" style="font-size:20px;margin-bottom:4px;"></i> Star
+            </button>
+            <button class="sprop-btn shape-pick" data-shape="diamond" style="flex-direction:column;padding:12px;">
+                <i class="fa-solid fa-diamond" style="font-size:20px;margin-bottom:4px;"></i> Diamond
+            </button>
+            <button class="sprop-btn shape-pick" data-shape="hexagon" style="flex-direction:column;padding:12px;">
+                <i class="fa-solid fa-hexagon" style="font-size:20px;margin-bottom:4px;"></i> Hexagon
             </button>
         </div>
-    </header>
-
-    <div class="flex flex-1 overflow-hidden relative">
-        <main class="flex-1 bg-gray-200 overflow-auto p-4 md:p-8 flex justify-center items-start" id="main-viewer">
-            <div id="empty-state" class="flex flex-col items-center justify-center text-gray-400 h-full w-full mt-20">
-                <i class="fa-solid fa-file-pdf text-6xl mb-4 text-gray-300"></i>
-                <h2 class="text-xl font-medium text-gray-600">Studio Ready</h2>
-            </div>
-            <div id="pdf-wrapper" class="hidden"><canvas id="pdf-canvas"></canvas></div>
-        </main>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
+            <label style="font-size:12px;color:var(--muted);">Fill:</label>
+            <input type="color" id="shape-fill" value="#3b82f6" class="tcolor">
+            <label style="font-size:12px;color:var(--muted);">Stroke:</label>
+            <input type="color" id="shape-stroke" value="#1d4ed8" class="tcolor">
+            <label style="font-size:12px;color:var(--muted);">Width:</label>
+            <input type="number" id="shape-stroke-w" value="2" min="0" max="20" class="modal-input" style="width:50px;margin:0">
+        </div>
+        <div class="modal-row">
+            <button class="modal-btn cancel" id="shape-cancel">Cancel</button>
+        </div>
     </div>
+</div>
 
-    <div id="pagination-controls" class="hidden absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white shadow-lg rounded-full px-4 py-2 flex items-center gap-4 z-50 border">
-        <button id="prev-page" class="text-gray-600 hover:text-blue-600"><i class="fa-solid fa-chevron-left"></i></button>
-        <span class="text-sm font-bold"><span id="current-page">0</span> / <span id="total-pages">0</span></span>
-        <button id="next-page" class="text-gray-600 hover:text-blue-600"><i class="fa-solid fa-chevron-right"></i></button>
+<!-- LINK MODAL -->
+<div class="modal-overlay" id="link-modal">
+    <div class="modal">
+        <h3><i class="fa-solid fa-link"></i> Add Hyperlink</h3>
+        <input class="modal-input" id="link-url" placeholder="https://example.com" type="url">
+        <div class="modal-row">
+            <button class="modal-btn cancel" id="link-cancel">Cancel</button>
+            <button class="modal-btn ok" id="link-ok">Apply</button>
+        </div>
     </div>
+</div>
 
-    <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay">
+    <div class="spinner"></div>
+    <div id="loading-text" style="font-size:13px;color:var(--muted);">Loading…</div>
+</div>
 
-        let pdfDoc = null, pageNum = 1, scale = window.innerWidth < 768 ? 1.0 : 1.5;
-        const canvas = document.getElementById('pdf-canvas'), ctx = canvas.getContext('2d'), wrapper = document.getElementById('pdf-wrapper');
-        let pdfBytes = null;
+<!-- TOAST -->
+<div id="toast"></div>
 
-        // --- HISTORY & STATE ---
-        let historyStack = [[]], historyIndex = 0, activeFieldId = null;
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
-        function saveState() {
-            const currentState = historyStack[historyIndex].map(f => ({...f}));
-            currentState.forEach(field => {
-                const el = document.getElementById(field.id);
-                if (el && field.type === 'text') {
-                    field.text = el.querySelector('textarea, input').value;
-                    field.width = el.querySelector('.pdf-field-input').offsetWidth;
-                }
-            });
-            historyStack = historyStack.slice(0, historyIndex + 1);
-            historyStack.push(JSON.parse(JSON.stringify(currentState)));
-            historyIndex++;
-            updateHistoryButtons();
+// ============================================================
+//  STATE
+// ============================================================
+let pdfDoc = null, pageNum = 1, scale = 1.5, userScale = 1.0;
+const canvas = document.getElementById('pdf-canvas');
+const ctx = canvas.getContext('2d');
+const wrapper = document.getElementById('pdf-wrapper');
+let pdfBytes = null;
+let currentTool = 'text'; // select | text | image | shape
+let gridVisible = false, rulersVisible = false, sidebarVisible = true;
+let clipboard = null;
+let selectedIds = new Set(); // multi-select
+let snapToGrid = false;
+
+// HISTORY
+let historyStack = [[]], historyIndex = 0, activeFieldId = null;
+
+// SAFE getter – the main fix for xCoordinate / null errors
+function safeField(id) {
+    if (!id) return null;
+    const f = getFields().find(f => f.id === id);
+    return f || null;
+}
+function getFields() { return historyStack[historyIndex]; }
+function getActiveFieldRef(id) { return safeField(id); }
+
+function saveState() {
+    // Snapshot current DOM text values back to state
+    getFields().forEach(field => {
+        if (!field) return;
+        const el = document.getElementById(field.id);
+        if (!el) return;
+        if (field.type === 'text') {
+            const ta = el.querySelector('.pdf-field-input');
+            if (ta) { field.text = ta.value; field.width = ta.offsetWidth || field.width; field.height = ta.offsetHeight || field.height; }
         }
+    });
+    historyStack = historyStack.slice(0, historyIndex + 1);
+    historyStack.push(JSON.parse(JSON.stringify(getFields())));
+    historyIndex++;
+    if (historyStack.length > 100) { historyStack.shift(); historyIndex--; }
+    updateHistoryButtons();
+    refreshLayersPanel();
+}
 
-        function updateHistoryButtons() {
-            document.getElementById('undo-btn').disabled = historyIndex === 0;
-            document.getElementById('redo-btn').disabled = historyIndex === historyStack.length - 1;
-        }
+function updateHistoryButtons() {
+    document.getElementById('undo-btn').disabled = historyIndex === 0;
+    document.getElementById('redo-btn').disabled = historyIndex === historyStack.length - 1;
+}
 
-        document.getElementById('undo-btn').addEventListener('click', () => { if (historyIndex > 0) { historyIndex--; renderStateToDOM(); }});
-        document.getElementById('redo-btn').addEventListener('click', () => { if (historyIndex < historyStack.length - 1) { historyIndex++; renderStateToDOM(); }});
-        function getFields() { return historyStack[historyIndex]; }
-        function getActiveFieldRef(id) { return getFields().find(f => f.id === id); } 
+document.getElementById('undo-btn').addEventListener('click', () => { if (historyIndex > 0) { historyIndex--; renderStateToDOM(); updateHistoryButtons(); } });
+document.getElementById('redo-btn').addEventListener('click', () => { if (historyIndex < historyStack.length - 1) { historyIndex++; renderStateToDOM(); updateHistoryButtons(); } });
 
-        // --- PDF LOADING ---
-        document.getElementById('upload-pdf').addEventListener('change', async (e) => {
-            const file = e.target.files[0]; if (!file) return;
-            const fileReader = new FileReader();
-            fileReader.onload = async function () {
-                pdfBytes = new Uint8Array(this.result);
-                pdfDoc = await pdfjsLib.getDocument({ data: pdfBytes }).promise;
-                document.getElementById('total-pages').textContent = pdfDoc.numPages;
-                document.getElementById('empty-state').classList.add('hidden');
-                wrapper.classList.remove('hidden');
-                document.getElementById('download-btn').classList.remove('hidden');
-                document.getElementById('pagination-controls').classList.remove('hidden');
-                document.getElementById('pagination-controls').classList.add('flex');
-                pageNum = 1; historyStack = [[]]; historyIndex = 0; renderPage(pageNum);
-            };
-            fileReader.readAsArrayBuffer(file);
+// ============================================================
+//  PDF LOADING
+// ============================================================
+function loadPDFBytes(bytes) {
+    pdfBytes = new Uint8Array(bytes);
+    showLoading('Rendering PDF…');
+    pdfjsLib.getDocument({ data: pdfBytes }).promise.then(doc => {
+        pdfDoc = doc;
+        document.getElementById('total-pages').textContent = doc.numPages;
+        document.getElementById('page-input').max = doc.numPages;
+        document.getElementById('empty-state').style.display = 'none';
+        wrapper.style.display = 'block';
+        document.getElementById('download-btn').style.display = '';
+        document.getElementById('btn-new-page').style.display = '';
+        document.getElementById('page-nav').classList.add('visible');
+        document.getElementById('zoom-bar').classList.add('visible');
+        historyStack = [[]]; historyIndex = 0;
+        pageNum = 1; renderPage(pageNum);
+        hideLoading();
+        renderPageThumbs();
+        toast('PDF loaded ✓');
+    }).catch(e => { hideLoading(); toast('Error loading PDF: ' + e.message); });
+}
+
+['upload-pdf','drop-pdf-input'].forEach(id => {
+    document.getElementById(id).addEventListener('change', e => {
+        const file = e.target.files[0]; if (!file) return;
+        const fr = new FileReader();
+        fr.onload = ev => loadPDFBytes(ev.target.result);
+        fr.readAsArrayBuffer(file);
+        e.target.value = '';
+    });
+});
+
+// Drag & drop on canvas area
+document.getElementById('main-area').addEventListener('dragover', e => { e.preventDefault(); document.getElementById('pdf-wrapper').classList.add('drag-over'); });
+document.getElementById('main-area').addEventListener('dragleave', () => document.getElementById('pdf-wrapper').classList.remove('drag-over'));
+document.getElementById('main-area').addEventListener('drop', e => {
+    e.preventDefault(); document.getElementById('pdf-wrapper').classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (file.type === 'application/pdf') {
+        const fr = new FileReader(); fr.onload = ev => loadPDFBytes(ev.target.result); fr.readAsArrayBuffer(file);
+    } else if (file.type.startsWith('image/')) {
+        const fr = new FileReader();
+        fr.onload = ev => addImageFromSrc(ev.target.result, file.type);
+        fr.readAsDataURL(file);
+    }
+});
+
+// ============================================================
+//  PAGE RENDERING
+// ============================================================
+function renderPage(num) {
+    if (!pdfDoc) return;
+    showLoading('Rendering page…');
+    pdfDoc.getPage(num).then(page => {
+        const unscaled = page.getViewport({ scale: 1 });
+        const containerW = document.getElementById('main-area').clientWidth - 64;
+        let baseScale = Math.min(containerW / unscaled.width, 1.5);
+        scale = baseScale * userScale;
+
+        const vp = page.getViewport({ scale });
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.floor(vp.width * dpr);
+        canvas.height = Math.floor(vp.height * dpr);
+        canvas.style.width = Math.floor(vp.width) + 'px';
+        canvas.style.height = Math.floor(vp.height) + 'px';
+        wrapper.style.width = Math.floor(vp.width) + 'px';
+        wrapper.style.height = Math.floor(vp.height) + 'px';
+
+        const transform = dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null;
+        page.render({ canvasContext: ctx, transform, viewport: vp }).promise.then(() => {
+            renderStateToDOM();
+            hideLoading();
         });
+        document.getElementById('page-input').value = num;
+        document.getElementById('zoom-label').textContent = Math.round(userScale * 100) + '%';
+    }).catch(e => { hideLoading(); toast('Page render error: ' + e.message); });
+}
 
-        // --- RESPONSIVE & HIGH-DPI PDF RENDERING (FIXES BLURRINESS) ---
-        function renderPage(num) {
-            pdfDoc.getPage(num).then(page => {
-                const unscaledViewport = page.getViewport({ scale: 1.0 });
-                const containerWidth = document.getElementById('main-viewer').clientWidth - 32;
-                let calculatedScale = containerWidth / unscaledViewport.width;
-                if (calculatedScale > 1.5) calculatedScale = 1.5;
-                scale = calculatedScale;
+document.getElementById('prev-page').addEventListener('click', () => goPage(pageNum - 1));
+document.getElementById('next-page').addEventListener('click', () => goPage(pageNum + 1));
+document.getElementById('page-input').addEventListener('change', e => goPage(parseInt(e.target.value)));
+function goPage(n) {
+    if (!pdfDoc) return;
+    n = Math.max(1, Math.min(pdfDoc.numPages, n));
+    if (n === pageNum) return;
+    setActiveField(null); pageNum = n; renderPage(pageNum);
+}
 
-                const viewport = page.getViewport({ scale: scale });
-                
-                // Device Pixel Ratio math for crystal clear mobile rendering
-                const outputScale = window.devicePixelRatio || 1;
-                
-                canvas.width = Math.floor(viewport.width * outputScale);
-                canvas.height = Math.floor(viewport.height * outputScale);
-                canvas.style.width = Math.floor(viewport.width) + "px";
-                canvas.style.height =  Math.floor(viewport.height) + "px";
-                
-                wrapper.style.width = Math.floor(viewport.width) + "px"; 
-                wrapper.style.height = Math.floor(viewport.height) + "px";
+// ============================================================
+//  ZOOM
+// ============================================================
+document.getElementById('zoom-in').addEventListener('click', () => { userScale = Math.min(userScale + 0.15, 4); renderPage(pageNum); });
+document.getElementById('zoom-out').addEventListener('click', () => { userScale = Math.max(userScale - 0.15, 0.3); renderPage(pageNum); });
+document.getElementById('zoom-fit').addEventListener('click', () => { userScale = 1; renderPage(pageNum); });
 
-                const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
+// Ctrl+scroll zoom
+document.getElementById('main-area').addEventListener('wheel', e => {
+    if (!e.ctrlKey) return; e.preventDefault();
+    userScale = e.deltaY < 0 ? Math.min(userScale + 0.1, 4) : Math.max(userScale - 0.1, 0.3);
+    renderPage(pageNum);
+}, { passive: false });
 
-                page.render({ 
-                    canvasContext: ctx, 
-                    transform: transform, 
-                    viewport: viewport 
-                }).promise.then(() => renderStateToDOM());
-            });
-            document.getElementById('current-page').textContent = num;
+// ============================================================
+//  TOOL SELECTION
+// ============================================================
+document.querySelectorAll('[data-tool]').forEach(btn => btn.addEventListener('click', () => {
+    currentTool = btn.dataset.tool;
+    document.querySelectorAll('[data-tool]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (currentTool === 'shape') document.getElementById('shape-modal').classList.add('open');
+}));
+
+// ============================================================
+//  CREATION – CLICK ON CANVAS
+// ============================================================
+wrapper.addEventListener('click', e => {
+    if (e.target !== canvas && !e.target.classList.contains('pdf-shape-inner')) {
+        if (!e.target.closest('.pdf-field-container')) setActiveField(null);
+        return;
+    }
+    if (currentTool !== 'text') return;
+    const rect = wrapper.getBoundingClientRect();
+    const field = {
+        id: `field_${Date.now()}`, type: 'text', page: pageNum,
+        x: e.clientX - rect.left, y: e.clientY - rect.top,
+        text: '', fontSize: 16, color: '#000000', fontFamily: 'Helvetica, sans-serif',
+        bold: false, italic: false, underline: false, strikethrough: false,
+        align: 'left', width: 180, height: 36, rotation: 0,
+        opacity: 1, bgColor: 'transparent', showBg: false,
+        locked: false, hidden: false, flipH: false, flipV: false, link: '', zIndex: getFields().length
+    };
+    getFields().push(field);
+    saveState(); renderStateToDOM();
+    // auto focus new text field
+    setTimeout(() => {
+        const el = document.getElementById(field.id);
+        if (el) { const ta = el.querySelector('.pdf-field-input'); if (ta) ta.focus(); }
+    }, 50);
+});
+
+// ============================================================
+//  IMAGE UPLOAD
+// ============================================================
+document.getElementById('upload-image').addEventListener('change', e => {
+    Array.from(e.target.files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = ev => addImageFromSrc(ev.target.result, file.type);
+        reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+});
+
+function addImageFromSrc(src, mimeType) {
+    const img = new Image();
+    img.onload = () => {
+        let w = img.width, h = img.height;
+        const maxW = (wrapper.offsetWidth || 400) * 0.5;
+        if (w > maxW) { h = (maxW / w) * h; w = maxW; }
+        const field = {
+            id: `img_${Date.now()}`, type: 'image', page: pageNum,
+            x: 60, y: 60, width: w, height: h, src,
+            rotation: 0, opacity: 1, locked: false, hidden: false,
+            flipH: false, flipV: false, zIndex: getFields().length,
+            mimeType: mimeType || 'image/png'
+        };
+        getFields().push(field);
+        saveState(); renderStateToDOM();
+        toast('Image added');
+    };
+    img.src = src;
+}
+
+// ============================================================
+//  SHAPES
+// ============================================================
+document.querySelectorAll('.shape-pick').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const shape = btn.dataset.shape;
+        const fill = document.getElementById('shape-fill').value;
+        const stroke = document.getElementById('shape-stroke').value;
+        const sw = parseInt(document.getElementById('shape-stroke-w').value) || 2;
+        const field = {
+            id: `shape_${Date.now()}`, type: 'shape', page: pageNum,
+            x: 100, y: 100, width: 150, height: 100,
+            shape, fill, stroke, strokeWidth: sw,
+            rotation: 0, opacity: 1, locked: false, hidden: false,
+            flipH: false, flipV: false, zIndex: getFields().length
+        };
+        getFields().push(field);
+        saveState(); renderStateToDOM();
+        document.getElementById('shape-modal').classList.remove('open');
+        toast('Shape added');
+    });
+});
+document.getElementById('shape-cancel').addEventListener('click', () => document.getElementById('shape-modal').classList.remove('open'));
+
+function buildShapeSVG(field) {
+    const { shape, fill, stroke, strokeWidth: sw } = field;
+    const w = field.width, h = field.height;
+    let inner = '';
+    if (shape === 'rect') inner = `<rect x="${sw/2}" y="${sw/2}" width="${w-sw}" height="${h-sw}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}" rx="4"/>`;
+    else if (shape === 'circle') inner = `<ellipse cx="${w/2}" cy="${h/2}" rx="${w/2-sw/2}" ry="${h/2-sw/2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
+    else if (shape === 'line') inner = `<line x1="0" y1="${h/2}" x2="${w}" y2="${h/2}" stroke="${stroke}" stroke-width="${sw}"/>`;
+    else if (shape === 'arrow') inner = `<defs><marker id="ah${field.id}" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0,8 3,0 6" fill="${stroke}"/></marker></defs><line x1="${sw}" y1="${h/2}" x2="${w-10}" y2="${h/2}" stroke="${stroke}" stroke-width="${sw}" marker-end="url(#ah${field.id})"/>`;
+    else if (shape === 'triangle') inner = `<polygon points="${w/2},${sw} ${w-sw},${h-sw} ${sw},${h-sw}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
+    else if (shape === 'star') {
+        const pts = starPoints(w/2, h/2, 5, Math.min(w,h)/2-sw, Math.min(w,h)/4);
+        inner = `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
+    } else if (shape === 'diamond') inner = `<polygon points="${w/2},${sw} ${w-sw},${h/2} ${w/2},${h-sw} ${sw},${h/2}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
+    else if (shape === 'hexagon') {
+        const pts = hexPoints(w/2, h/2, Math.min(w,h)/2 - sw);
+        inner = `<polygon points="${pts}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`;
+    }
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${inner}</svg>`;
+}
+function starPoints(cx, cy, n, r, ir) {
+    let pts = [];
+    for (let i = 0; i < n * 2; i++) {
+        const angle = (i * Math.PI / n) - Math.PI / 2;
+        const radius = i % 2 === 0 ? r : ir;
+        pts.push(`${cx + radius * Math.cos(angle)},${cy + radius * Math.sin(angle)}`);
+    }
+    return pts.join(' ');
+}
+function hexPoints(cx, cy, r) {
+    return Array.from({ length: 6 }, (_, i) => {
+        const a = (Math.PI / 3) * i - Math.PI / 6;
+        return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`;
+    }).join(' ');
+}
+
+// ============================================================
+//  DOM RENDERING
+// ============================================================
+function renderStateToDOM() {
+    document.querySelectorAll('.pdf-field-container').forEach(el => el.remove());
+    const fields = getFields();
+    // Sort by zIndex
+    const sorted = [...fields].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+
+    sorted.forEach(field => {
+        if (!field || field.page !== pageNum) return;
+        if (field.hidden) return;
+
+        const container = document.createElement('div');
+        container.className = 'pdf-field-container' + (activeFieldId === field.id ? ' active' : '') + (field.locked ? ' locked' : '');
+        container.style.cssText = `left:${field.x||0}px;top:${field.y||0}px;transform:rotate(${field.rotation||0}deg);opacity:${field.opacity||1};`;
+        container.id = field.id;
+
+        let contentHtml = '';
+
+        if (field.type === 'text') {
+            const td = field.strikethrough ? 'line-through' : (field.underline ? 'underline' : 'none');
+            const flipT = [field.flipH ? 'scaleX(-1)' : '', field.flipV ? 'scaleY(-1)' : ''].filter(Boolean).join(' ') || 'none';
+            const bgStyle = field.showBg ? `background:${field.bgColor||'transparent'};` : '';
+            // Map stored font family to correct browser-renderable name for Gurmukhi
+            const isGurmukhi = (field.fontFamily || '').includes('NotoSansGurmukhi') || /[\u0A00-\u0A7F]/.test(field.text || '');
+            const displayFont = isGurmukhi
+                ? "'Noto Sans Gurmukhi', 'NotoSansGurmukhi', serif"
+                : (field.fontFamily || 'Helvetica, sans-serif');
+            const styles = `font-size:${field.fontSize||16}px;color:${field.color||'#000'};font-weight:${field.bold?'bold':'normal'};font-style:${field.italic?'italic':'normal'};text-decoration:${td};text-align:${field.align||'left'};width:${field.width||180}px;font-family:${displayFont};transform:${flipT};${bgStyle}`;
+            contentHtml = `<textarea class="pdf-field-input" placeholder="Type… / ਟਾਈਪ ਕਰੋ" style="${styles}" ${isGurmukhi ? 'data-gurmukhi="true"' : ''}>${escHtml(field.text||'')}</textarea>`;
+
+        } else if (field.type === 'image') {
+            const flipT = [field.flipH ? 'scaleX(-1)' : '', field.flipV ? 'scaleY(-1)' : ''].filter(Boolean).join(' ') || 'none';
+            contentHtml = `
+                <div class="pdf-image-wrapper" style="width:${field.width}px;height:${field.height}px;transform:${flipT};">
+                    <img src="${field.src}" draggable="false"/>
+                    ${resizeHandlesHTML()}
+                    <div class="rotate-handle" title="Rotate"><i class="fa-solid fa-rotate"></i></div>
+                    <div class="dup-handle" title="Duplicate"><i class="fa-regular fa-copy"></i></div>
+                </div>`;
+
+        } else if (field.type === 'shape') {
+            const flipT = [field.flipH ? 'scaleX(-1)' : '', field.flipV ? 'scaleY(-1)' : ''].filter(Boolean).join(' ') || 'none';
+            const svg = buildShapeSVG(field);
+            contentHtml = `
+                <div class="pdf-shape-wrapper" style="width:${field.width}px;height:${field.height}px;transform:${flipT};">
+                    <div class="pdf-shape-inner">${svg}</div>
+                    ${resizeHandlesHTML()}
+                    <div class="rotate-handle" title="Rotate"><i class="fa-solid fa-rotate"></i></div>
+                    <div class="dup-handle" title="Duplicate"><i class="fa-regular fa-copy"></i></div>
+                </div>`;
         }
 
-        document.getElementById('prev-page').addEventListener('click', () => { if(pageNum > 1) { setActiveField(null); pageNum--; renderPage(pageNum); }});
-        document.getElementById('next-page').addEventListener('click', () => { if(pageNum < pdfDoc.numPages) { setActiveField(null); pageNum++; renderPage(pageNum); }});
+        container.innerHTML = `
+            <div class="field-controls">
+                <div class="fc-btn drag" title="Move"><i class="fa-solid fa-arrows-up-down-left-right" style="font-size:9px"></i></div>
+                <div style="display:flex;gap:2px;">
+                    <div class="fc-btn dup-btn" title="Duplicate (Ctrl+D)"><i class="fa-regular fa-copy" style="font-size:9px"></i></div>
+                    <div class="fc-btn lock-btn" title="Lock"><i class="fa-solid fa-lock" style="font-size:9px"></i></div>
+                    <div class="fc-btn danger del-btn" title="Delete"><i class="fa-solid fa-xmark" style="font-size:9px"></i></div>
+                </div>
+            </div>
+            ${contentHtml}`;
 
-        // --- CREATION ---
-        wrapper.addEventListener('click', (e) => {
-            if (e.target !== canvas) return;
-            const rect = wrapper.getBoundingClientRect();
-            getFields().push({
-                id: `field_${Date.now()}`, type: 'text', page: pageNum, x: e.clientX - rect.left, y: e.clientY - rect.top,
-                text: '', fontSize: 16, color: '#000000', bold: false, italic: false, underline: false, align: 'left', width: 150, rotation: 0
-            });
+        if (field.type === 'text') {
+            // Add rotate + dup for text
+            container.querySelector('.pdf-field-input').insertAdjacentHTML('afterend',
+                `<div class="rotate-handle" title="Rotate" style="display:none"><i class="fa-solid fa-rotate"></i></div>
+                 <div class="dup-handle" title="Duplicate" style="display:none"><i class="fa-regular fa-copy"></i></div>
+                 ${resizeHandlesHTML()}`
+            );
+        }
+
+        wrapper.appendChild(container);
+        attachListeners(container, field);
+    });
+    updateHistoryButtons();
+    refreshLayersPanel();
+    updatePropsPanel();
+}
+
+function resizeHandlesHTML() {
+    return ['nw','n','ne','e','se','s','sw','w'].map(d => `<div class="resize-handle ${d}" data-handle="${d}"></div>`).join('');
+}
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ============================================================
+//  ATTACH LISTENERS – safe null checks everywhere
+// ============================================================
+function attachListeners(container, fieldData) {
+    const id = fieldData.id;
+
+    // Click to select
+    container.addEventListener('pointerdown', e => {
+        if (!e.target.closest('.fc-btn') && !e.target.closest('.resize-handle') && !e.target.closest('.rotate-handle') && !e.target.closest('.dup-handle')) {
+            setActiveField(id);
+        }
+    });
+
+    // Right click -> context menu
+    container.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e.clientX, e.clientY, id); });
+
+    // Input (text)
+    const input = container.querySelector('.pdf-field-input');
+    if (input) {
+        input.addEventListener('focus', () => setActiveField(id));
+        input.addEventListener('click', e => e.stopPropagation());
+        input.addEventListener('input', () => { input.style.height = 'auto'; input.style.height = input.scrollHeight + 'px'; });
+        input.addEventListener('blur', () => saveState());
+    }
+
+    // Image click to select
+    const imgW = container.querySelector('.pdf-image-wrapper');
+    if (imgW) imgW.addEventListener('pointerdown', () => setActiveField(id));
+
+    // Shape click
+    const shapeW = container.querySelector('.pdf-shape-wrapper');
+    if (shapeW) shapeW.addEventListener('pointerdown', () => setActiveField(id));
+
+    // Delete button
+    const delBtn = container.querySelector('.del-btn');
+    if (delBtn) delBtn.addEventListener('pointerdown', e => { e.stopPropagation(); deleteField(id); });
+
+    // Duplicate button (in field controls)
+    const dupBtn = container.querySelector('.dup-btn');
+    if (dupBtn) dupBtn.addEventListener('pointerdown', e => { e.stopPropagation(); duplicateField(id); });
+
+    // Inline dup handle (on images/shapes)
+    const dupHandle = container.querySelector('.dup-handle');
+    if (dupHandle) dupHandle.addEventListener('pointerdown', e => { e.stopPropagation(); duplicateField(id); });
+
+    // Lock button
+    const lockBtn = container.querySelector('.lock-btn');
+    if (lockBtn) lockBtn.addEventListener('pointerdown', e => { e.stopPropagation(); toggleLock(id); });
+
+    // ---- DRAG ----
+    const dragHandle = container.querySelector('.drag');
+    if (dragHandle) {
+        dragHandle.addEventListener('pointerdown', e => {
+            e.preventDefault(); e.stopPropagation();
+            const field = safeField(id); if (!field || field.locked) return;
+            setActiveField(id);
+            dragHandle.setPointerCapture(e.pointerId);
+            const rect = container.getBoundingClientRect();
+            const offX = e.clientX - rect.left, offY = e.clientY - rect.top;
+
+            const onMove = ev => {
+                ev.preventDefault();
+                const f = safeField(id); if (!f) return;
+                const wr = wrapper.getBoundingClientRect();
+                let nx = ev.clientX - wr.left - offX;
+                let ny = ev.clientY - wr.top - offY;
+                if (snapToGrid) { nx = Math.round(nx / 20) * 20; ny = Math.round(ny / 20) * 20; }
+                f.x = nx; f.y = ny;
+                container.style.left = nx + 'px'; container.style.top = ny + 'px';
+            };
+            const onUp = () => {
+                dragHandle.releasePointerCapture(e.pointerId);
+                document.removeEventListener('pointermove', onMove);
+                document.removeEventListener('pointerup', onUp);
+                saveState();
+            };
+            document.addEventListener('pointermove', onMove, { passive: false });
+            document.addEventListener('pointerup', onUp);
+        });
+    }
+
+    // ---- RESIZE ----
+    container.querySelectorAll('.resize-handle').forEach(handle => {
+        handle.addEventListener('pointerdown', e => {
+            e.preventDefault(); e.stopPropagation();
+            const field = safeField(id); if (!field || field.locked) return;
+            setActiveField(id);
+            handle.setPointerCapture(e.pointerId);
+
+            const type = handle.dataset.handle;
+            const startX = e.clientX, startY = e.clientY;
+            const startW = field.width || 150, startH = field.height || 100;
+            const startLeft = field.x || 0, startTop = field.y || 0;
+            const rad = -(field.rotation || 0) * Math.PI / 180;
+            const cos = Math.cos(rad), sin = Math.sin(rad);
+            const innerEl = container.querySelector('.pdf-image-wrapper, .pdf-shape-wrapper, .pdf-field-input');
+
+            const onMove = ev => {
+                ev.preventDefault();
+                const f = safeField(id); if (!f) return;
+                const mdx = ev.clientX - startX, mdy = ev.clientY - startY;
+                const dx = mdx * cos + mdy * sin;
+                const dy = -mdx * sin + mdy * cos;
+                let nw = startW, nh = startH, nx = startLeft, ny = startTop;
+
+                if (type.includes('e')) nw = startW + dx;
+                if (type.includes('w')) { nw = startW - dx; nx = startLeft + (startW - nw); }
+                if (type.includes('s')) nh = startH + dy;
+                if (type.includes('n')) { nh = startH - dy; ny = startTop + (startH - nh); }
+
+                if (nw < 20) nw = 20; if (nh < 10) nh = 10;
+                f.width = nw; f.height = nh; f.x = nx; f.y = ny;
+                container.style.left = nx + 'px'; container.style.top = ny + 'px';
+                if (innerEl) { innerEl.style.width = nw + 'px'; innerEl.style.height = nh + 'px'; }
+                // Update shape SVG live
+                if (f.type === 'shape') {
+                    const shapeInner = container.querySelector('.pdf-shape-inner');
+                    if (shapeInner) shapeInner.innerHTML = buildShapeSVG(f);
+                }
+            };
+            const onUp = () => {
+                handle.releasePointerCapture(e.pointerId);
+                document.removeEventListener('pointermove', onMove);
+                document.removeEventListener('pointerup', onUp);
+                saveState();
+            };
+            document.addEventListener('pointermove', onMove, { passive: false });
+            document.addEventListener('pointerup', onUp);
+        });
+    });
+
+    // ---- ROTATE ----
+    const rotHandle = container.querySelector('.rotate-handle');
+    if (rotHandle) {
+        rotHandle.addEventListener('pointerdown', e => {
+            e.preventDefault(); e.stopPropagation();
+            const field = safeField(id); if (!field || field.locked) return;
+            setActiveField(id);
+            rotHandle.setPointerCapture(e.pointerId);
+
+            const onMove = ev => {
+                ev.preventDefault();
+                const f = safeField(id); if (!f) return;
+                const rect = container.getBoundingClientRect();
+                const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+                f.rotation = Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI + 90;
+                if (ev.shiftKey) f.rotation = Math.round(f.rotation / 15) * 15; // snap to 15°
+                container.style.transform = `rotate(${f.rotation}deg)`;
+            };
+            const onUp = () => {
+                rotHandle.releasePointerCapture(e.pointerId);
+                document.removeEventListener('pointermove', onMove);
+                document.removeEventListener('pointerup', onUp);
+                saveState();
+            };
+            document.addEventListener('pointermove', onMove, { passive: false });
+            document.addEventListener('pointerup', onUp);
+        });
+    }
+}
+
+// ============================================================
+//  ACTIVE FIELD & FORMATTING TOOLBAR
+// ============================================================
+function setActiveField(id) {
+    activeFieldId = id;
+    document.querySelectorAll('.pdf-field-container').forEach(el => el.classList.remove('active'));
+    const tb = document.getElementById('toolbar');
+    if (id) {
+        const field = safeField(id);
+        const el = document.getElementById(id);
+        if (el) el.classList.add('active');
+        if (field && field.type === 'text') {
+            tb.classList.add('visible');
+            document.getElementById('font-size-input').value = field.fontSize || 16;
+            document.getElementById('color-input').value = field.color || '#000000';
+            document.getElementById('bgcolor-input').value = field.bgColor || '#ffffff';
+            document.getElementById('font-family-select').value = field.fontFamily || 'Helvetica, sans-serif';
+            document.getElementById('opacity-input').value = Math.round((field.opacity || 1) * 100);
+            document.querySelectorAll('.format-toggle').forEach(btn => btn.classList.toggle('active', !!field[btn.dataset.format]));
+            document.querySelectorAll('.align-toggle').forEach(btn => btn.classList.toggle('active', field.align === btn.dataset.align));
+        } else if (field && (field.type === 'image' || field.type === 'shape')) {
+            tb.classList.add('visible');
+            document.getElementById('opacity-input').value = Math.round((field.opacity || 1) * 100);
+        } else tb.classList.remove('visible');
+    } else tb.classList.remove('visible');
+    updatePropsPanel();
+}
+
+// Toolbar events
+document.querySelectorAll('.format-toggle').forEach(btn => btn.addEventListener('click', () => {
+    const f = safeField(activeFieldId); if (!f) return;
+    f[btn.dataset.format] = !f[btn.dataset.format];
+    saveState(); renderStateToDOM();
+}));
+document.querySelectorAll('.align-toggle').forEach(btn => btn.addEventListener('click', () => {
+    const f = safeField(activeFieldId); if (!f) return;
+    f.align = btn.dataset.align; saveState(); renderStateToDOM();
+}));
+document.getElementById('font-size-input').addEventListener('input', e => {
+    const f = safeField(activeFieldId); if (!f) return;
+    f.fontSize = Math.max(6, parseInt(e.target.value) || 16); renderStateToDOM();
+});
+document.getElementById('font-size-input').addEventListener('change', () => saveState());
+document.getElementById('color-input').addEventListener('input', e => {
+    const f = safeField(activeFieldId); if (!f) return;
+    f.color = e.target.value; renderStateToDOM();
+});
+document.getElementById('color-input').addEventListener('change', () => saveState());
+document.getElementById('bgcolor-input').addEventListener('input', e => {
+    const f = safeField(activeFieldId); if (!f) return;
+    f.bgColor = e.target.value; renderStateToDOM();
+});
+document.getElementById('bgcolor-input').addEventListener('change', () => saveState());
+document.getElementById('btn-bgcolor-toggle').addEventListener('click', () => {
+    const f = safeField(activeFieldId); if (!f) return;
+    f.showBg = !f.showBg; saveState(); renderStateToDOM();
+});
+document.getElementById('font-family-select').addEventListener('change', e => {
+    const f = safeField(activeFieldId); if (!f) return;
+    f.fontFamily = e.target.value; saveState(); renderStateToDOM();
+});
+document.getElementById('opacity-input').addEventListener('input', e => {
+    const f = safeField(activeFieldId); if (!f) return;
+    f.opacity = Math.max(0, Math.min(1, (parseInt(e.target.value) || 100) / 100));
+    const el = document.getElementById(activeFieldId);
+    if (el) el.style.opacity = f.opacity;
+});
+document.getElementById('opacity-input').addEventListener('change', () => saveState());
+document.getElementById('btn-bring-front').addEventListener('click', () => {
+    const f = safeField(activeFieldId); if (!f) return;
+    const maxZ = Math.max(...getFields().map(x => x.zIndex || 0));
+    f.zIndex = maxZ + 1; saveState(); renderStateToDOM();
+});
+document.getElementById('btn-send-back').addEventListener('click', () => {
+    const f = safeField(activeFieldId); if (!f) return;
+    const minZ = Math.min(...getFields().map(x => x.zIndex || 0));
+    f.zIndex = minZ - 1; saveState(); renderStateToDOM();
+});
+document.getElementById('btn-flip-h').addEventListener('click', () => {
+    const f = safeField(activeFieldId); if (!f) return;
+    f.flipH = !f.flipH; saveState(); renderStateToDOM();
+});
+document.getElementById('btn-flip-v').addEventListener('click', () => {
+    const f = safeField(activeFieldId); if (!f) return;
+    f.flipV = !f.flipV; saveState(); renderStateToDOM();
+});
+document.getElementById('btn-lock').addEventListener('click', () => toggleLock(activeFieldId));
+document.getElementById('btn-link').addEventListener('click', () => {
+    const f = safeField(activeFieldId); if (!f || f.type !== 'text') return;
+    document.getElementById('link-url').value = f.link || '';
+    document.getElementById('link-modal').classList.add('open');
+});
+document.getElementById('link-ok').addEventListener('click', () => {
+    const f = safeField(activeFieldId); if (!f) return;
+    f.link = document.getElementById('link-url').value;
+    saveState(); document.getElementById('link-modal').classList.remove('open'); toast('Link saved');
+});
+document.getElementById('link-cancel').addEventListener('click', () => document.getElementById('link-modal').classList.remove('open'));
+
+// Deselect on canvas click
+document.addEventListener('pointerdown', e => {
+    if (!e.target.closest('.pdf-field-container') && !e.target.closest('#header') && !e.target.closest('#toolbar') && !e.target.closest('#ctx-menu') && !e.target.closest('#sidebar')) {
+        setActiveField(null);
+    }
+    hideContextMenu();
+});
+
+// ============================================================
+//  FIELD ACTIONS
+// ============================================================
+function deleteField(id) {
+    const fields = getFields();
+    const idx = fields.findIndex(f => f.id === id);
+    if (idx === -1) return;
+    fields.splice(idx, 1);
+    if (activeFieldId === id) setActiveField(null);
+    saveState(); renderStateToDOM();
+}
+
+function duplicateField(id) {
+    const f = safeField(id); if (!f) return;
+    const copy = JSON.parse(JSON.stringify(f));
+    copy.id = `${f.type}_${Date.now()}`;
+    copy.x = (f.x || 0) + 20; copy.y = (f.y || 0) + 20;
+    copy.zIndex = (f.zIndex || 0) + 1;
+    getFields().push(copy);
+    saveState(); renderStateToDOM();
+    setActiveField(copy.id);
+    toast('Duplicated');
+}
+
+function toggleLock(id) {
+    const f = safeField(id); if (!f) return;
+    f.locked = !f.locked;
+    saveState(); renderStateToDOM();
+    toast(f.locked ? 'Element locked 🔒' : 'Element unlocked 🔓');
+}
+
+// ============================================================
+//  SELECT ALL / CLEAR ALL
+// ============================================================
+document.getElementById('btn-select-all').addEventListener('click', () => {
+    toast(`${getFields().filter(f => f.page === pageNum).length} elements on this page`);
+});
+document.getElementById('btn-clear-all').addEventListener('click', () => {
+    if (!getFields().length) return;
+    if (!confirm('Clear all elements on this page?')) return;
+    historyStack[historyIndex] = getFields().filter(f => f.page !== pageNum);
+    saveState(); renderStateToDOM(); toast('Cleared');
+});
+
+// ============================================================
+//  COPY / PASTE
+// ============================================================
+function copyField(id) {
+    const f = safeField(id); if (!f) return;
+    clipboard = JSON.parse(JSON.stringify(f));
+    toast('Copied');
+}
+function pasteField() {
+    if (!clipboard) { toast('Nothing to paste'); return; }
+    const copy = JSON.parse(JSON.stringify(clipboard));
+    copy.id = `${copy.type || 'field'}_${Date.now()}`;
+    copy.x = (copy.x || 0) + 25; copy.y = (copy.y || 0) + 25;
+    copy.page = pageNum;
+    getFields().push(copy);
+    saveState(); renderStateToDOM();
+    setActiveField(copy.id);
+    toast('Pasted');
+}
+
+// ============================================================
+//  CONTEXT MENU
+// ============================================================
+let ctxTargetId = null;
+function showContextMenu(x, y, id) {
+    ctxTargetId = id;
+    const menu = document.getElementById('ctx-menu');
+    menu.style.display = 'block';
+    menu.style.left = x + 'px'; menu.style.top = y + 'px';
+    // Prevent overflow
+    requestAnimationFrame(() => {
+        if (x + menu.offsetWidth > window.innerWidth) menu.style.left = (x - menu.offsetWidth) + 'px';
+        if (y + menu.offsetHeight > window.innerHeight) menu.style.top = (y - menu.offsetHeight) + 'px';
+    });
+}
+function hideContextMenu() { document.getElementById('ctx-menu').style.display = 'none'; }
+
+document.getElementById('cm-duplicate').addEventListener('click', () => { duplicateField(ctxTargetId); hideContextMenu(); });
+document.getElementById('cm-copy').addEventListener('click', () => { copyField(ctxTargetId); hideContextMenu(); });
+document.getElementById('cm-paste').addEventListener('click', () => { pasteField(); hideContextMenu(); });
+document.getElementById('cm-delete').addEventListener('click', () => { deleteField(ctxTargetId); hideContextMenu(); });
+document.getElementById('cm-lock').addEventListener('click', () => { toggleLock(ctxTargetId); hideContextMenu(); });
+document.getElementById('cm-hide').addEventListener('click', () => {
+    const f = safeField(ctxTargetId); if (!f) return;
+    f.hidden = !f.hidden; saveState(); renderStateToDOM(); hideContextMenu(); toast(f.hidden ? 'Hidden' : 'Visible');
+});
+document.getElementById('cm-front').addEventListener('click', () => {
+    const f = safeField(ctxTargetId); if (!f) return;
+    f.zIndex = Math.max(...getFields().map(x => x.zIndex || 0)) + 1;
+    saveState(); renderStateToDOM(); hideContextMenu();
+});
+document.getElementById('cm-back').addEventListener('click', () => {
+    const f = safeField(ctxTargetId); if (!f) return;
+    f.zIndex = Math.min(...getFields().map(x => x.zIndex || 0)) - 1;
+    saveState(); renderStateToDOM(); hideContextMenu();
+});
+document.getElementById('cm-align-center-h').addEventListener('click', () => {
+    const f = safeField(ctxTargetId); if (!f) return;
+    f.x = (wrapper.offsetWidth - (f.width || 0)) / 2;
+    saveState(); renderStateToDOM(); hideContextMenu();
+});
+document.getElementById('cm-align-center-v').addEventListener('click', () => {
+    const f = safeField(ctxTargetId); if (!f) return;
+    f.y = (wrapper.offsetHeight - (f.height || 0)) / 2;
+    saveState(); renderStateToDOM(); hideContextMenu();
+});
+
+// ============================================================
+//  KEYBOARD SHORTCUTS
+// ============================================================
+document.addEventListener('keydown', e => {
+    const tag = document.activeElement.tagName;
+    const isText = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+    if ((e.ctrlKey || e.metaKey)) {
+        if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); document.getElementById('undo-btn').click(); }
+        if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); document.getElementById('redo-btn').click(); }
+        if (e.key === 'd') { e.preventDefault(); duplicateField(activeFieldId); }
+        if (e.key === 'c' && !isText) { e.preventDefault(); copyField(activeFieldId); }
+        if (e.key === 'v' && !isText) { e.preventDefault(); pasteField(); }
+        if (e.key === 'a' && !isText) { e.preventDefault(); /* select all hint */ toast('Tip: Right-click elements for more options'); }
+        if (e.key === 'b' && !isText) { e.preventDefault(); const f = safeField(activeFieldId); if (f && f.type==='text') { f.bold=!f.bold; saveState(); renderStateToDOM(); } }
+        if (e.key === 'i' && !isText) { e.preventDefault(); const f = safeField(activeFieldId); if (f && f.type==='text') { f.italic=!f.italic; saveState(); renderStateToDOM(); } }
+        if (e.key === '+' || e.key === '=') { e.preventDefault(); document.getElementById('zoom-in').click(); }
+        if (e.key === '-') { e.preventDefault(); document.getElementById('zoom-out').click(); }
+        if (e.key === '0') { e.preventDefault(); document.getElementById('zoom-fit').click(); }
+    }
+
+    if (!isText) {
+        if (e.key === 'Delete' || e.key === 'Backspace') { deleteField(activeFieldId); }
+        if (e.key === 'Escape') setActiveField(null);
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            const f = safeField(activeFieldId); if (!f || f.locked) return;
+            const step = e.shiftKey ? 10 : 1;
+            if (e.key === 'ArrowLeft') f.x -= step;
+            if (e.key === 'ArrowRight') f.x += step;
+            if (e.key === 'ArrowUp') f.y -= step;
+            if (e.key === 'ArrowDown') f.y += step;
+            const el = document.getElementById(activeFieldId);
+            if (el) { el.style.left = f.x + 'px'; el.style.top = f.y + 'px'; }
+        }
+        if (e.key === 'v') { currentTool = 'select'; document.querySelector('[data-tool="select"]').click(); }
+        if (e.key === 't') { currentTool = 'text'; document.querySelector('[data-tool="text"]').click(); }
+    }
+});
+
+// ============================================================
+//  GRID & RULERS
+// ============================================================
+document.getElementById('btn-grid').addEventListener('click', () => {
+    gridVisible = !gridVisible;
+    document.getElementById('main-area').classList.toggle('grid-bg', gridVisible);
+    document.getElementById('btn-grid').classList.toggle('active', gridVisible);
+    snapToGrid = gridVisible;
+    toast(gridVisible ? 'Grid on (snap enabled)' : 'Grid off');
+});
+document.getElementById('btn-ruler').addEventListener('click', () => {
+    rulersVisible = !rulersVisible;
+    document.getElementById('btn-ruler').classList.toggle('active', rulersVisible);
+    toast(rulersVisible ? 'Rulers on' : 'Rulers off');
+});
+
+// ============================================================
+//  SIDEBAR TABS
+// ============================================================
+document.querySelectorAll('.stab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.stab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.querySelectorAll('#sidebar-content > div').forEach(p => p.style.display = 'none');
+        document.getElementById('tab-' + tab.dataset.tab).style.display = 'block';
+    });
+});
+
+document.getElementById('btn-sidebar').addEventListener('click', () => {
+    sidebarVisible = !sidebarVisible;
+    document.getElementById('sidebar').style.display = sidebarVisible ? '' : 'none';
+    document.getElementById('btn-sidebar').classList.toggle('active', !sidebarVisible);
+});
+
+// ============================================================
+//  LAYERS PANEL
+// ============================================================
+function refreshLayersPanel() {
+    const list = document.getElementById('layers-list');
+    if (!list) return;
+    const fields = getFields().filter(f => f.page === pageNum).reverse();
+    if (!fields.length) { list.innerHTML = '<p style="color:var(--muted);font-size:12px;text-align:center;padding-top:16px;">No elements</p>'; return; }
+    list.innerHTML = fields.map(f => {
+        const icon = f.type === 'text' ? 'fa-text-height' : f.type === 'image' ? 'fa-image' : 'fa-shapes';
+        const label = f.type === 'text' ? (f.text || 'Text').substring(0, 18) || 'Empty text' : f.type === 'image' ? 'Image' : `${f.shape||'Shape'}`;
+        return `<div class="layer-item ${activeFieldId === f.id ? 'active' : ''}" data-lid="${f.id}">
+            <div class="layer-icon"><i class="fa-solid ${icon}"></i></div>
+            <div class="layer-name">${label}</div>
+            <div class="layer-vis" data-vis="${f.id}" title="${f.hidden ? 'Show' : 'Hide'}"><i class="fa-solid ${f.hidden ? 'fa-eye-slash' : 'fa-eye'}"></i></div>
+            <div class="layer-vis" data-lck="${f.id}" title="${f.locked ? 'Unlock' : 'Lock'}" style="margin-left:2px"><i class="fa-solid ${f.locked ? 'fa-lock' : 'fa-lock-open'}"></i></div>
+        </div>`;
+    }).join('');
+
+    list.querySelectorAll('.layer-item').forEach(item => {
+        item.addEventListener('click', e => {
+            if (e.target.closest('[data-vis]') || e.target.closest('[data-lck]')) return;
+            setActiveField(item.dataset.lid); renderStateToDOM();
+        });
+    });
+    list.querySelectorAll('[data-vis]').forEach(btn => {
+        btn.addEventListener('click', e => { e.stopPropagation(); const f = safeField(btn.dataset.vis); if (!f) return; f.hidden = !f.hidden; saveState(); renderStateToDOM(); });
+    });
+    list.querySelectorAll('[data-lck]').forEach(btn => {
+        btn.addEventListener('click', e => { e.stopPropagation(); toggleLock(btn.dataset.lck); });
+    });
+}
+
+// ============================================================
+//  PROPERTIES PANEL
+// ============================================================
+function updatePropsPanel() {
+    const panel = document.getElementById('props-panel');
+    if (!panel) return;
+    const f = safeField(activeFieldId);
+    if (!f) { panel.innerHTML = '<p style="color:var(--muted);font-size:12px;text-align:center;padding-top:20px;">Select an element</p>'; return; }
+    panel.innerHTML = `
+        <div class="sprop-group">
+            <span class="sprop-label">Position & Size</span>
+            <div class="sprop-row">
+                <span style="font-size:11px;color:var(--muted);width:14px">X</span>
+                <input class="sprop-input" id="px" type="number" value="${Math.round(f.x||0)}" style="width:70px">
+                <span style="font-size:11px;color:var(--muted);width:14px">Y</span>
+                <input class="sprop-input" id="py" type="number" value="${Math.round(f.y||0)}" style="width:70px">
+            </div>
+            <div class="sprop-row">
+                <span style="font-size:11px;color:var(--muted);width:14px">W</span>
+                <input class="sprop-input" id="pw" type="number" value="${Math.round(f.width||0)}" style="width:70px">
+                <span style="font-size:11px;color:var(--muted);width:14px">H</span>
+                <input class="sprop-input" id="ph" type="number" value="${Math.round(f.height||0)}" style="width:70px">
+            </div>
+            <div class="sprop-row">
+                <span style="font-size:11px;color:var(--muted)">Rotation °</span>
+                <input class="sprop-input" id="pr" type="number" value="${Math.round(f.rotation||0)}" style="width:70px">
+            </div>
+        </div>
+        <div class="sprop-group">
+            <span class="sprop-label">Actions</span>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                <button class="sprop-btn" onclick="duplicateField('${f.id}')"><i class="fa-regular fa-copy"></i> Duplicate</button>
+                <button class="sprop-btn" onclick="toggleLock('${f.id}')"><i class="fa-solid fa-lock"></i> ${f.locked?'Unlock':'Lock'}</button>
+                <button class="sprop-btn danger" onclick="deleteField('${f.id}')"><i class="fa-solid fa-trash"></i> Delete</button>
+            </div>
+        </div>
+    `;
+    // Bind prop inputs
+    ['px','py','pw','ph','pr'].forEach(pid => {
+        const inp = document.getElementById(pid);
+        if (!inp) return;
+        inp.addEventListener('change', () => {
+            const ff = safeField(activeFieldId); if (!ff) return;
+            const val = parseFloat(inp.value) || 0;
+            if (pid === 'px') ff.x = val;
+            if (pid === 'py') ff.y = val;
+            if (pid === 'pw') ff.width = val;
+            if (pid === 'ph') ff.height = val;
+            if (pid === 'pr') ff.rotation = val;
             saveState(); renderStateToDOM();
         });
+    });
+}
 
-        document.getElementById('upload-image').addEventListener('change', (e) => {
-            const file = e.target.files[0]; if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const img = new Image();
-                img.onload = () => {
-                    let w = img.width, h = img.height;
-                    if(w > 300) { h = (300/w) * h; w = 300; }
-                    getFields().push({
-                        id: `img_${Date.now()}`, type: 'image', page: pageNum, x: 50, y: 50,
-                        width: w, height: h, src: event.target.result, rotation: 0
-                    });
-                    saveState(); renderStateToDOM();
-                };
-                img.src = event.target.result;
-            };
-            reader.readAsDataURL(file); e.target.value = '';
+// ============================================================
+//  PAGE THUMBNAILS
+// ============================================================
+function renderPageThumbs() {
+    if (!pdfDoc) return;
+    const list = document.getElementById('pages-list');
+    list.innerHTML = '';
+    for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const div = document.createElement('div');
+        div.className = 'page-thumb' + (i === pageNum ? ' active' : '');
+        div.dataset.page = i;
+        const thumbCanvas = document.createElement('canvas');
+        const label = document.createElement('div');
+        label.className = 'page-thumb-label';
+        label.textContent = 'Page ' + i;
+        div.appendChild(thumbCanvas);
+        div.appendChild(label);
+        list.appendChild(div);
+        div.addEventListener('click', () => goPage(i));
+        // Render thumb
+        pdfDoc.getPage(i).then(page => {
+            const vp = page.getViewport({ scale: 0.3 });
+            thumbCanvas.width = Math.floor(vp.width);
+            thumbCanvas.height = Math.floor(vp.height);
+            page.render({ canvasContext: thumbCanvas.getContext('2d'), viewport: vp });
         });
+    }
+}
 
-        // --- DOM RENDERING ---
-        function renderStateToDOM() {
-            document.querySelectorAll('.pdf-field-container').forEach(el => el.remove());
+// ============================================================
+//  EXPORT TO PDF – with null safety
+// ============================================================
+document.getElementById('download-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('download-btn');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Exporting…';
+    btn.disabled = true;
+    showLoading('Generating PDF…');
 
-            getFields().forEach(field => {
-                if (field.page !== pageNum) return;
+    try {
+        setActiveField(null);
+        if (!pdfBytes) throw new Error('No PDF loaded');
+        const { PDFDocument, rgb, StandardFonts, degrees } = PDFLib;
+        const pdfDocEdit = await PDFDocument.load(pdfBytes);
+        if (window.fontkit) pdfDocEdit.registerFontkit(window.fontkit);
 
-                const container = document.createElement('div');
-                container.className = `pdf-field-container ${activeFieldId === field.id ? 'active' : ''}`;
-                container.style.left = `${field.x}px`;
-                container.style.top = `${field.y}px`;
-                container.style.transform = `rotate(${field.rotation || 0}deg)`;
-                container.id = field.id;
+        const fReg = await pdfDocEdit.embedFont(StandardFonts.Helvetica);
+        const fBold = await pdfDocEdit.embedFont(StandardFonts.HelveticaBold);
+        const fItalic = await pdfDocEdit.embedFont(StandardFonts.HelveticaOblique);
+        const fBI = await pdfDocEdit.embedFont(StandardFonts.HelveticaBoldOblique);
 
-                let contentHtml = '';
+        // ---- Load NotoSansGurmukhi for Punjabi text ----
+        let gurmukhiFont = null;
+        try {
+            // Try local file first (same folder), then CDN fallback
+            let gurmukhiBytes = null;
+            const localUrls = [
+                './NotoSansGurmukhi-VariableFont_wdth,wght.ttf',
+                './NotoSansGurmukhi.ttf',
+                'NotoSansGurmukhi-Regular.ttf'
+            ];
+            for (const url of localUrls) {
+                try {
+                    const resp = await fetch(url);
+                    if (resp.ok) { gurmukhiBytes = await resp.arrayBuffer(); break; }
+                } catch(_) {}
+            }
+            // If no local file, try Google Fonts CDN binary
+            if (!gurmukhiBytes) {
+                try {
+                    const resp = await fetch('https://fonts.gstatic.com/s/notosansgurmukhi/v27/w8g9H3EvSn3NfQ1YFnOcwYaZEsRZPqnMhE-L3QFM.ttf');
+                    if (resp.ok) gurmukhiBytes = await resp.arrayBuffer();
+                } catch(_) {}
+            }
+            if (gurmukhiBytes && window.fontkit) {
+                gurmukhiFont = await pdfDocEdit.embedFont(gurmukhiBytes);
+                console.log('✓ NotoSansGurmukhi loaded for PDF export');
+            } else if (gurmukhiBytes) {
+                // fontkit not registered yet? try again
+                pdfDocEdit.registerFontkit(window.fontkit);
+                gurmukhiFont = await pdfDocEdit.embedFont(gurmukhiBytes);
+            }
+        } catch(fontErr) {
+            console.warn('NotoSansGurmukhi could not be loaded for PDF export:', fontErr.message);
+            // Non-fatal: Punjabi text will fall back to Helvetica (may show boxes, but won't crash)
+        }
+
+        // Helper: detect if text contains Gurmukhi Unicode block (U+0A00–U+0A7F)
+        function hasGurmukhi(text) {
+            return /[\u0A00-\u0A7F]/.test(text);
+        }
+        // Helper: is this field set to use Gurmukhi font?
+        function isGurmukhiField(field) {
+            return (field.fontFamily || '').toLowerCase().includes('gurmukhi') || hasGurmukhi(field.text || '');
+        }
+
+        const pages = pdfDocEdit.getPages();
+        const fields = getFields();
+
+        // ── Utility: guard every number before pdf-lib sees it ──────────────
+        // pdf-lib throws "cannot read properties of null (reading 'xCoordinate')"
+        // whenever x, y, width, height, or size is NaN / Infinity / null.
+        function safeNum(v, fallback = 0) {
+            const n = Number(v);
+            return (isFinite(n) && !isNaN(n)) ? n : fallback;
+        }
+        function safeCoords(x, y) {
+            return { x: safeNum(x), y: safeNum(y) };
+        }
+
+        for (const field of fields) {
+            try {                                         // ← per-field try/catch so one bad field never aborts the whole export
+                if (!field || field.hidden) continue;
+                if (!field.page || field.page < 1 || field.page > pages.length) continue;
+
+                const page = pages[field.page - 1];
+                if (!page) continue;
+                const pH = safeNum(page.getHeight(), 842);
+                const sc  = safeNum(scale, 1) || 1;     // never divide by zero
+
+                // Pull every coordinate through safeNum so NaN is impossible below
+                const fx   = safeNum(field.x, 0);
+                const fy   = safeNum(field.y, 0);
+                const fw   = safeNum(field.width,  100);
+                const fh   = safeNum(field.height,  50);
+                const rot  = safeNum(field.rotation, 0);
+                const opac = Math.max(0, Math.min(1, safeNum(field.opacity, 1)));
+
+                // ── TEXT ────────────────────────────────────────────────────
                 if (field.type === 'text') {
-                    const styles = `font-size: ${field.fontSize}px; color: ${field.color}; font-weight: ${field.bold ? 'bold' : 'normal'}; font-style: ${field.italic ? 'italic' : 'normal'}; text-decoration: ${field.underline ? 'underline' : 'none'}; text-align: ${field.align}; width: ${field.width}px;`;
-                    contentHtml = `<textarea class="pdf-field-input" placeholder="Type..." style="${styles}" rows="1">${field.text}</textarea>`;
-                } else if (field.type === 'image') {
-                    contentHtml = `
-                        <div class="pdf-image-wrapper" style="width: ${field.width}px; height: ${field.height}px;">
-                            <img src="${field.src}" />
-                            <div class="resize-handle nw" data-handle="nw"></div>
-                            <div class="resize-handle ne" data-handle="ne"></div>
-                            <div class="resize-handle sw" data-handle="sw"></div>
-                            <div class="resize-handle se" data-handle="se"></div>
-                            <div class="rotate-handle"></div>
-                        </div>`;
-                }
+                    if (!field.text || !field.text.trim()) continue;
 
-                container.innerHTML = `
-                    <div class="field-controls">
-                        <div class="drag-handle"><i class="fa-solid fa-arrows-up-down-left-right text-xs"></i></div>
-                        <div class="delete-btn"><i class="fa-solid fa-xmark text-xs"></i></div>
-                    </div>
-                    ${contentHtml}
-                `;
+                    let fnt;
+                    if (isGurmukhiField(field) && gurmukhiFont) {
+                        fnt = gurmukhiFont;
+                    } else {
+                        if (field.bold && field.italic) fnt = fBI;
+                        else if (field.bold)            fnt = fBold;
+                        else if (field.italic)          fnt = fItalic;
+                        else                            fnt = fReg;
+                    }
 
-                wrapper.appendChild(container);
-                attachWidgetListeners(container, field);
-            });
-            updateHistoryButtons();
-        }
+                    const fs  = safeNum(field.fontSize, 16) / sc;
+                    const lh  = fs * 1.3;
+                    const { r, g, b } = hexToRgb(field.color || '#000000');
+                    const lines = field.text.split('\n');
+                    let curY = pH - (fy / sc) - fs;
 
-        // --- UPGRADE: POINTER EVENTS (FIXES ALL MOBILE TOUCH ISSUES) ---
-        function attachWidgetListeners(container, fieldData) {
-            const id = fieldData.id;
-            const input = container.querySelector('.pdf-field-input');
-            const dragHandle = container.querySelector('.drag-handle');
-            const rotateHandle = container.querySelector('.rotate-handle');
-            const resizeHandles = container.querySelectorAll('.resize-handle');
+                    for (const line of lines) {
+                        if (!line) { curY -= lh; continue; }
 
-            if (input) {
-                input.addEventListener('focus', () => setActiveField(id));
-                input.addEventListener('click', e => e.stopPropagation());
-                input.addEventListener('input', e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; });
-                input.addEventListener('blur', () => saveState());
-            }
-            if (fieldData.type === 'image') {
-                const imgWrapper = container.querySelector('.pdf-image-wrapper');
-                imgWrapper.addEventListener('pointerdown', () => setActiveField(id));
-            }
+                        // widthOfTextAtSize can return 0 for unsupported glyphs — guard it
+                        let tw = 0;
+                        try { tw = safeNum(fnt.widthOfTextAtSize(line, fs), 0); } catch(_) {}
 
-            container.querySelector('.delete-btn').addEventListener('pointerdown', (e) => {
-                e.stopPropagation();
-                const fields = getFields(); fields.splice(fields.findIndex(f => f.id === id), 1);
-                setActiveField(null); saveState(); renderStateToDOM();
-            });
+                        let alignX = safeNum(fx / sc, 0);
+                        const cw = safeNum(fw / sc, 0);
+                        if (field.align === 'center' && tw > 0) alignX += (cw - tw) / 2;
+                        if (field.align === 'right'  && tw > 0) alignX += cw - tw;
 
-            // Universal Drag (Pointer API)
-            dragHandle.addEventListener('pointerdown', (e) => {
-                e.preventDefault(); e.stopPropagation(); setActiveField(id);
-                dragHandle.setPointerCapture(e.pointerId); // Forces all touch to stay locked on this element
+                        // Final guard: reject any coord that is still not finite
+                        if (!isFinite(alignX)) alignX = 0;
+                        if (!isFinite(curY))   { curY -= lh; continue; }
 
-                const rect = container.getBoundingClientRect();
-                const offsetX = e.clientX - rect.left; 
-                const offsetY = e.clientY - rect.top;
-
-                const onMove = (ev) => {
-                    ev.preventDefault();
-                    const wr = wrapper.getBoundingClientRect();
-                    const stateField = getActiveFieldRef(id); 
-                    stateField.x = ev.clientX - wr.left - offsetX;
-                    stateField.y = ev.clientY - wr.top - offsetY;
-                    container.style.left = `${stateField.x}px`; container.style.top = `${stateField.y}px`;
-                };
-                const onUp = (ev) => { 
-                    dragHandle.releasePointerCapture(ev.pointerId);
-                    document.removeEventListener('pointermove', onMove); 
-                    document.removeEventListener('pointerup', onUp);
-                    saveState(); 
-                };
-                document.addEventListener('pointermove', onMove, { passive: false }); 
-                document.addEventListener('pointerup', onUp);
-            });
-
-            // 4-Way Resize (Pointer API)
-            resizeHandles.forEach(handle => {
-                handle.addEventListener('pointerdown', (e) => {
-                    e.preventDefault(); e.stopPropagation(); setActiveField(id);
-                    handle.setPointerCapture(e.pointerId);
-                    
-                    const stateField = getActiveFieldRef(id);
-                    const startX = e.clientX; const startY = e.clientY;
-                    const startW = stateField.width; const startH = stateField.height;
-                    const startLeft = stateField.x; const startTop = stateField.y;
-                    const type = handle.dataset.handle;
-                    const wrapperEl = container.querySelector('.pdf-image-wrapper');
-
-                    const rad = -(stateField.rotation || 0) * Math.PI / 180;
-                    const cos = Math.cos(rad); const sin = Math.sin(rad);
-
-                    const onMove = (ev) => {
-                        ev.preventDefault();
-                        const mouseDx = ev.clientX - startX; const mouseDy = ev.clientY - startY;
-                        const dx = mouseDx * cos - mouseDy * sin;
-                        const dy = mouseDx * sin + mouseDy * cos;
-
-                        let newW = startW, newH = startH, newX = startLeft, newY = startTop;
-
-                        if (type === 'se') { newW = startW + dx; newH = startH + dy; }
-                        else if (type === 'sw') { newW = startW - dx; newH = startH + dy; newX = startLeft + dx; }
-                        else if (type === 'ne') { newW = startW + dx; newH = startH - dy; newY = startTop + dy; }
-                        else if (type === 'nw') { newW = startW - dx; newH = startH - dy; newX = startLeft + dx; newY = startTop + dy; }
-
-                        if (newW > 20 && newH > 20) {
-                            stateField.width = newW; stateField.height = newH;
-                            stateField.x = newX; stateField.y = newY;
-                            wrapperEl.style.width = `${newW}px`; wrapperEl.style.height = `${newH}px`;
-                            container.style.left = `${newX}px`; container.style.top = `${newY}px`;
-                        }
-                    };
-                    const onUp = (ev) => { 
-                        handle.releasePointerCapture(ev.pointerId);
-                        document.removeEventListener('pointermove', onMove); 
-                        document.removeEventListener('pointerup', onUp); 
-                        saveState(); 
-                    };
-                    document.addEventListener('pointermove', onMove, { passive: false }); 
-                    document.addEventListener('pointerup', onUp);
-                });
-            });
-
-            // Rotation (Pointer API)
-            if (rotateHandle) {
-                rotateHandle.addEventListener('pointerdown', (e) => {
-                    e.preventDefault(); e.stopPropagation(); setActiveField(id);
-                    rotateHandle.setPointerCapture(e.pointerId);
-                    const stateField = getActiveFieldRef(id);
-                    
-                    const onMove = (ev) => {
-                        ev.preventDefault();
-                        const rect = container.getBoundingClientRect();
-                        const cx = rect.left + rect.width / 2;
-                        const cy = rect.top + rect.height / 2;
-                        const angle = Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI;
-                        stateField.rotation = angle + 90;
-                        container.style.transform = `rotate(${stateField.rotation}deg)`;
-                    };
-                    const onUp = (ev) => { 
-                        rotateHandle.releasePointerCapture(ev.pointerId);
-                        document.removeEventListener('pointermove', onMove); 
-                        document.removeEventListener('pointerup', onUp); 
-                        saveState(); 
-                    };
-                    document.addEventListener('pointermove', onMove, { passive: false }); 
-                    document.addEventListener('pointerup', onUp);
-                });
-            }
-        }
-
-        // --- FORMATTING UI ---
-        function setActiveField(id) {
-            activeFieldId = id;
-            document.querySelectorAll('.pdf-field-container').forEach(el => el.classList.remove('active'));
-            const tb = document.getElementById('formatting-toolbar');
-            if (id) {
-                const field = getActiveFieldRef(id);
-                document.getElementById(id).classList.add('active');
-                if (field.type === 'text') {
-                    tb.classList.remove('hidden');
-                    document.getElementById('font-size-input').value = field.fontSize; document.getElementById('color-input').value = field.color;
-                    document.querySelectorAll('.format-toggle').forEach(btn => btn.classList.toggle('active', field[btn.dataset.format]));
-                    document.querySelectorAll('.align-toggle').forEach(btn => btn.classList.toggle('active', field.align === btn.dataset.align));
-                } else tb.classList.add('hidden');
-            } else tb.classList.add('hidden');
-        }
-
-        document.querySelectorAll('.format-toggle').forEach(btn => btn.addEventListener('click', () => {
-            if(!activeFieldId) return; getActiveFieldRef(activeFieldId)[btn.dataset.format] = !getActiveFieldRef(activeFieldId)[btn.dataset.format]; saveState(); renderStateToDOM();
-        }));
-        document.querySelectorAll('.align-toggle').forEach(btn => btn.addEventListener('click', () => {
-            if(!activeFieldId) return; getActiveFieldRef(activeFieldId).align = btn.dataset.align; saveState(); renderStateToDOM();
-        }));
-        document.getElementById('font-size-input').addEventListener('change', (e) => { if(!activeFieldId) return; getActiveFieldRef(activeFieldId).fontSize = parseInt(e.target.value); saveState(); renderStateToDOM(); });
-        document.getElementById('color-input').addEventListener('change', (e) => { if(!activeFieldId) return; getActiveFieldRef(activeFieldId).color = e.target.value; saveState(); renderStateToDOM(); });
-        document.addEventListener('pointerdown', (e) => { if (activeFieldId && !e.target.closest('.pdf-field-container') && e.target !== canvas && !e.target.closest('header')) setActiveField(null); });
-
-        // --- EXPORT TO PDF (WITH ROTATION MATH) ---
-        function hexToRgbObj(hex) { return { r: parseInt(hex.slice(1, 3), 16) / 255, g: parseInt(hex.slice(3, 5), 16) / 255, b: parseInt(hex.slice(5, 7), 16) / 255 }; }
-
-        document.getElementById('download-btn').addEventListener('click', async (e) => {
-            const btn = e.currentTarget; const originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin sm:mr-1"></i> <span class="hidden sm:inline">Exporting...</span>';
-            btn.disabled = true;
-
-            try {
-                setActiveField(null);
-                const { PDFDocument, rgb, StandardFonts, degrees } = PDFLib;
-                const pdfDocEdit = await PDFDocument.load(pdfBytes);
-                if (window.fontkit) pdfDocEdit.registerFontkit(window.fontkit);
-
-                const fontRegular = await pdfDocEdit.embedFont(StandardFonts.Helvetica);
-                const fontBold = await pdfDocEdit.embedFont(StandardFonts.HelveticaBold);
-                const fontItalic = await pdfDocEdit.embedFont(StandardFonts.HelveticaOblique);
-                const fontBoldItalic = await pdfDocEdit.embedFont(StandardFonts.HelveticaBoldOblique);
-
-                let customFont;
-                try { customFont = await pdfDocEdit.embedFont(await fetch('./NotoSansGurmukhi-VariableFont_wdth,wght.ttf').then(r => r.arrayBuffer())); } 
-                catch(e) { customFont = fontRegular; }
-
-                const pages = pdfDocEdit.getPages();
-
-                for (const field of getFields()) {
-                    const page = pages[field.page - 1];
-                    const pageHeight = page.getHeight();
-
-                    if (field.type === 'text' && field.text.trim()) {
-                        let activeFont = customFont;
-                        if(customFont === fontRegular) {
-                            if (field.bold && field.italic) activeFont = fontBoldItalic; else if (field.bold) activeFont = fontBold; else if (field.italic) activeFont = fontItalic;
-                        }
-                        const lines = field.text.split('\n'); const lineHeight = field.fontSize * 1.2; const cRgb = hexToRgbObj(field.color);
-                        let currentY = pageHeight - (field.y / scale) - (field.fontSize/scale);
-
-                        for(let i = 0; i < lines.length; i++) {
-                            const lineText = lines[i]; const textWidth = activeFont.widthOfTextAtSize(lineText, field.fontSize / scale);
-                            let alignOffset = 0; const containerPdfWidth = field.width / scale;
-                            if (field.align === 'center') alignOffset = (containerPdfWidth - textWidth) / 2;
-                            if (field.align === 'right') alignOffset = containerPdfWidth - textWidth;
-                            
-                            const finalX = (field.x / scale) + alignOffset;
-                            page.drawText(lineText, { x: finalX, y: currentY, size: field.fontSize / scale, font: activeFont, color: rgb(cRgb.r, cRgb.g, cRgb.b) });
-                            if (field.underline) page.drawLine({ start: { x: finalX, y: currentY - 2 }, end: { x: finalX + textWidth, y: currentY - 2 }, thickness: 1, color: rgb(cRgb.r, cRgb.g, cRgb.b) });
-                            currentY -= (lineHeight / scale);
-                        }
-                    } 
-                    else if (field.type === 'image') {
-                        const imgBytes = await fetch(field.src).then(r => r.arrayBuffer());
-                        const pdfImage = field.src.includes('image/jpeg') ? await pdfDocEdit.embedJpg(imgBytes) : await pdfDocEdit.embedPng(imgBytes);
-
-                        const pdfWidth = field.width / scale;
-                        const pdfHeight = field.height / scale;
-                        const rotationDeg = field.rotation || 0;
-                        
-                        const centerX = (field.x / scale) + (pdfWidth / 2);
-                        const centerY = pageHeight - (field.y / scale) - (pdfHeight / 2);
-                        
-                        const rad = -rotationDeg * Math.PI / 180;
-                        const cos = Math.cos(rad);
-                        const sin = Math.sin(rad);
-
-                        const dx = -pdfWidth / 2;
-                        const dy = -pdfHeight / 2;
-
-                        const rotatedDx = dx * cos - dy * sin;
-                        const rotatedDy = dx * sin + dy * cos;
-
-                        const finalPdfX = centerX + rotatedDx;
-                        const finalPdfY = centerY + rotatedDy;
-                        
-                        page.drawImage(pdfImage, {
-                            x: finalPdfX,
-                            y: finalPdfY,
-                            width: pdfWidth,
-                            height: pdfHeight,
-                            rotate: degrees(-rotationDeg)
+                        page.drawText(line, {
+                            x: alignX, y: curY,
+                            size: Math.max(1, fs),
+                            font: fnt,
+                            color: rgb(r, g, b),
+                            rotate: degrees(-rot),
+                            opacity: opac
                         });
+
+                        if (field.underline && tw > 0) {
+                            page.drawLine({
+                                start: safeCoords(alignX, curY - 2),
+                                end:   safeCoords(alignX + tw, curY - 2),
+                                thickness: 0.8, color: rgb(r, g, b)
+                            });
+                        }
+                        if (field.strikethrough && tw > 0) {
+                            page.drawLine({
+                                start: safeCoords(alignX, curY + fs * 0.35),
+                                end:   safeCoords(alignX + tw, curY + fs * 0.35),
+                                thickness: 0.8, color: rgb(r, g, b)
+                            });
+                        }
+                        curY -= lh;
+                    }
+
+                // ── IMAGE ───────────────────────────────────────────────────
+                } else if (field.type === 'image') {
+                    if (!field.src) continue;
+                    let imgBytes;
+                    try { imgBytes = await fetch(field.src).then(res => res.arrayBuffer()); } catch(_) { continue; }
+                    let pdfImg;
+                    try {
+                        const mime = field.mimeType || '';
+                        if (mime.includes('jpeg') || mime.includes('jpg') || field.src.startsWith('data:image/jpeg')) {
+                            pdfImg = await pdfDocEdit.embedJpg(imgBytes);
+                        } else {
+                            pdfImg = await pdfDocEdit.embedPng(imgBytes);
+                        }
+                    } catch(_) {
+                        try { pdfImg = await pdfDocEdit.embedPng(imgBytes); } catch(_2) { continue; }
+                    }
+                    if (!pdfImg) continue;
+
+                    const pw  = safeNum(fw / sc, 50);
+                    const ph2 = safeNum(fh / sc, 50);
+                    if (pw <= 0 || ph2 <= 0) continue;
+
+                    const cx  = safeNum(fx / sc + pw / 2, 0);
+                    const cy  = safeNum(pH - fy / sc - ph2 / 2, 0);
+                    const rad = -rot * Math.PI / 180;
+                    const rdx = safeNum((-pw/2) * Math.cos(rad) - (-ph2/2) * Math.sin(rad), 0);
+                    const rdy = safeNum((-pw/2) * Math.sin(rad) + (-ph2/2) * Math.cos(rad), 0);
+
+                    page.drawImage(pdfImg, {
+                        x: safeNum(cx + rdx),
+                        y: safeNum(cy + rdy),
+                        width:  pw,
+                        height: ph2,
+                        rotate: degrees(-rot),
+                        opacity: opac
+                    });
+
+                // ── SHAPE ───────────────────────────────────────────────────
+                } else if (field.type === 'shape') {
+                    const pw  = safeNum(fw / sc, 50);
+                    const ph2 = safeNum(fh / sc, 50);
+                    if (pw <= 0 || ph2 <= 0) continue;
+                    const sx = safeNum(fx / sc, 0);
+                    const sy = safeNum(pH - fy / sc - ph2, 0);
+                    const { r: fr, g: fg, b: fb } = hexToRgb(field.fill   || '#3b82f6');
+                    const { r: sr, g: sg, b: sb } = hexToRgb(field.stroke || '#1d4ed8');
+                    const sw2   = Math.max(0, safeNum(field.strokeWidth, 2) / sc);
+                    const fillC = rgb(fr, fg, fb), strokeC = rgb(sr, sg, sb);
+
+                    if (field.shape === 'rect') {
+                        page.drawRectangle({ x: sx, y: sy, width: pw, height: ph2, color: fillC, borderColor: strokeC, borderWidth: sw2, opacity: opac });
+                    } else if (field.shape === 'circle') {
+                        page.drawEllipse({ x: safeNum(sx + pw/2), y: safeNum(sy + ph2/2), xScale: pw/2, yScale: ph2/2, color: fillC, borderColor: strokeC, borderWidth: sw2, opacity: opac });
+                    } else if (field.shape === 'line') {
+                        page.drawLine({ start: safeCoords(sx, sy + ph2/2), end: safeCoords(sx + pw, sy + ph2/2), thickness: Math.max(0.5, sw2 * 2), color: strokeC, opacity: opac });
+                    } else if (field.shape === 'triangle' || field.shape === 'star' || field.shape === 'diamond' || field.shape === 'hexagon' || field.shape === 'arrow') {
+                        // These complex shapes are drawn as rectangles in the PDF (SVG not supported by pdf-lib)
+                        page.drawRectangle({ x: sx, y: sy, width: pw, height: ph2, color: fillC, borderColor: strokeC, borderWidth: sw2, opacity: opac });
                     }
                 }
+            } catch (fieldErr) {
+                // Skip this field and log — never let one field crash the whole export
+                console.warn('Skipped field during export due to error:', fieldErr.message, field);
+            }
+        }
 
-                const blob = new Blob([await pdfDocEdit.save()], { type: 'application/pdf' });
-                const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'Pro_Edited_Document.pdf';
-                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        const pdfBlobBytes = await pdfDocEdit.save();
+        const blob = new Blob([pdfBlobBytes], { type: 'application/pdf' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'PDFStudio_Export.pdf';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        toast('PDF exported successfully ✓');
 
-            } catch (error) { console.error(error); alert("Export Failed: " + error.message); } 
-            finally { btn.innerHTML = originalText; btn.disabled = false; }
-        });
+    } catch (err) {
+        console.error('Export error:', err);
+        toast('Export failed: ' + err.message, true);
+    } finally {
+        btn.innerHTML = orig; btn.disabled = false; hideLoading();
+    }
+});
 
-        // --- DATA LOSS PREVENTION ---
-        window.addEventListener('beforeunload', (e) => {
-            if (historyIndex > 0) { e.preventDefault(); e.returnValue = ''; }
-        });
-    </script>
+function hexToRgb(hex) {
+    if (!hex || hex.length < 4) return { r: 0, g: 0, b: 0 };
+    const c = hex.replace('#', '');
+    const full = c.length === 3 ? c.split('').map(x => x + x).join('') : c;
+    return {
+        r: parseInt(full.slice(0,2), 16) / 255,
+        g: parseInt(full.slice(2,4), 16) / 255,
+        b: parseInt(full.slice(4,6), 16) / 255
+    };
+}
+
+// ============================================================
+//  LOADING / TOAST HELPERS
+// ============================================================
+function showLoading(msg) {
+    document.getElementById('loading-text').textContent = msg || 'Loading…';
+    document.getElementById('loading-overlay').classList.add('open');
+}
+function hideLoading() { document.getElementById('loading-overlay').classList.remove('open'); }
+
+let toastTimer;
+function toast(msg, isError = false) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.style.borderColor = isError ? 'var(--red)' : 'var(--border)';
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ============================================================
+//  WINDOW UNLOAD GUARD
+// ============================================================
+window.addEventListener('beforeunload', e => {
+    if (historyIndex > 0) { e.preventDefault(); e.returnValue = ''; }
+});
+
+// ============================================================
+//  INIT
+// ============================================================
+toast('Welcome to PDF Studio Pro! Open a PDF to begin.');
+</script>
 </body>
 </html>
